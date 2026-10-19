@@ -1,0 +1,37 @@
+{
+  "name": "MHP Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.16.6",
+      "tflint": false,
+      "terragrunt": false
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+
+  "mounts": [
+    "source=${localEnv:HOME:${localEnv:USERPROFILE}}/.aws,target=/home/vscode/.aws,type=bind"
+  ],
+
+  "containerEnv": {
+    "AWS_REGION": "us-west-1",
+    "AWS_DEFAULT_REGION": "us-west-1"
+  },
+
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash .devcontainer/check-env.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hashicorp.terraform",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-pull-request-github"
+      ]
+    }
+  }
+}
