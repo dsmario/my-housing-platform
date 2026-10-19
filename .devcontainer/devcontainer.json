@@ -6,20 +6,21 @@
     "ghcr.io/devcontainers/features/aws-cli:1": {},
     "ghcr.io/devcontainers/features/terraform:1": {
       "version": "1.16.6",
-      "tflint": false,
-      "terragrunt": false
+      "tflint": "none",
+      "terragrunt": "none"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
 
   "mounts": [
-    "source=${localEnv:HOME:${localEnv:USERPROFILE}}/.aws,target=/home/vscode/.aws,type=bind"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/home/vscode/.aws,type=bind"
   ],
 
   "containerEnv": {
     "AWS_REGION": "us-west-1",
-    "AWS_DEFAULT_REGION": "us-west-1"
+    "AWS_DEFAULT_REGION": "us-west-1",
+    "AWS_PROFILE": "mhp"
   },
 
   "remoteUser": "vscode",
