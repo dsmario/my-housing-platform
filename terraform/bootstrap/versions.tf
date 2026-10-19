@@ -7,6 +7,14 @@ terraform {
       version = "~> 5.80"
     }
   }
+
+  backend "s3" {
+    bucket       = "id-vault-tfstate-623096509073"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "us-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
