@@ -9,18 +9,21 @@ locals {
 # Terraform state bucket. Native S3 locking (use_lockfile) needs no DynamoDB.
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket" "tfstate" {
-  bucket = "${local.name_prefix}-tfstate-${local.account_id}"
+  provider = aws.state
+  bucket   = "${local.name_prefix}-tfstate-${local.account_id}"
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+  provider = aws.state
+  bucket   = aws_s3_bucket.tfstate.id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+  provider = aws.state
+  bucket   = aws_s3_bucket.tfstate.id
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -29,6 +32,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {
 }
 
 resource "aws_s3_bucket_public_access_block" "tfstate" {
+  provider                = aws.state
   bucket                  = aws_s3_bucket.tfstate.id
   block_public_acls       = true
   block_public_policy     = true
@@ -37,7 +41,8 @@ resource "aws_s3_bucket_public_access_block" "tfstate" {
 }
 
 resource "aws_s3_bucket_policy" "tfstate_tls_only" {
-  bucket = aws_s3_bucket.tfstate.id
+  provider = aws.state
+  bucket   = aws_s3_bucket.tfstate.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

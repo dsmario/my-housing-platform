@@ -6,13 +6,22 @@ from contextlib import asynccontextmanager
 import psycopg
 from fastapi import FastAPI, HTTPException
 
-DATABASE_URL = os.environ["DATABASE_URL"]
-
 SEED_TEXT = "Hello from the database. Web, API and Postgres are connected."
 
 
 def connect():
-    return psycopg.connect(DATABASE_URL)
+    # Local: one DATABASE_URL. AWS: separate DB_* values, with the user and
+    # password injected from the RDS-managed secret in Secrets Manager.
+    if "DATABASE_URL" in os.environ:
+        return psycopg.connect(os.environ["DATABASE_URL"])
+    return psycopg.connect(
+        host=os.environ["DB_HOST"],
+        port=os.environ.get("DB_PORT", "5432"),
+        dbname=os.environ["DB_NAME"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        sslmode="require",
+    )
 
 
 @asynccontextmanager

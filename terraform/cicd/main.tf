@@ -15,6 +15,17 @@ resource "aws_ecr_repository" "api" {
   }
 }
 
+resource "aws_ecr_repository" "web" {
+  name                 = "mhp-${var.environment}-web"
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
 data "aws_iam_policy_document" "github_trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -36,8 +47,8 @@ data "aws_iam_policy_document" "github_trust" {
 }
 
 resource "aws_iam_role" "github_deploy" {
-  name               = "mhp-${var.environment}-github-deploy"
-  assume_role_policy = data.aws_iam_policy_document.github_trust.json
+  name                 = "mhp-${var.environment}-github-deploy"
+  assume_role_policy   = data.aws_iam_policy_document.github_trust.json
   max_session_duration = 3600
 }
 
@@ -53,7 +64,7 @@ data "aws_iam_policy_document" "github_deploy" {
       "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage",
     ]
-    resources = [aws_ecr_repository.api.arn]
+    resources = [aws_ecr_repository.api.arn, aws_ecr_repository.web.arn]
   }
 }
 

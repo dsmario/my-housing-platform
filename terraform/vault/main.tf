@@ -97,9 +97,9 @@ resource "aws_s3_bucket_policy" "quarantine" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Sid = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
+      { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
         Resource = [aws_s3_bucket.quarantine.arn, "${aws_s3_bucket.quarantine.arn}/*"],
-        Condition = { Bool = { "aws:SecureTransport" = "false" } } },
+      Condition = { Bool = { "aws:SecureTransport" = "false" } } },
     ]
   })
 }
@@ -109,9 +109,9 @@ resource "aws_s3_bucket_policy" "vault" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      { Sid = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
+      { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
         Resource = [aws_s3_bucket.vault.arn, "${aws_s3_bucket.vault.arn}/*"],
-        Condition = { Bool = { "aws:SecureTransport" = "false" } } },
+      Condition = { Bool = { "aws:SecureTransport" = "false" } } },
     ]
   })
 }
@@ -180,10 +180,10 @@ resource "aws_iam_role_policy" "guardduty_scan_s3" {
         Resource = ["${aws_s3_bucket.quarantine.arn}/*"]
       },
       {
-        Sid       = "DecryptForScan"
-        Effect    = "Allow"
-        Action    = ["kms:GenerateDataKey", "kms:Decrypt"]
-        Resource  = [data.aws_kms_alias.vault.target_key_arn]
+        Sid      = "DecryptForScan"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource = [data.aws_kms_alias.vault.target_key_arn]
         Condition = {
           StringLike = { "kms:ViaService" = "s3.${var.region}.amazonaws.com" }
         }
@@ -221,7 +221,7 @@ resource "aws_cloudwatch_event_rule" "scan_result" {
 resource "aws_sqs_queue" "scan_result_dlq" {
   name                      = "${local.prefix}-scan-result-dlq"
   message_retention_seconds = 1209600
-  kms_master_key_id        = data.aws_kms_alias.vault.target_key_arn
+  kms_master_key_id         = data.aws_kms_alias.vault.target_key_arn
 }
 
 resource "aws_sqs_queue" "scan_result" {

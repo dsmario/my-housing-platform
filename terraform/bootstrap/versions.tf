@@ -29,3 +29,18 @@ provider "aws" {
     }
   }
 }
+
+# The state bucket lives in us-west-1; everything else follows var.region.
+provider "aws" {
+  alias               = "state"
+  region              = var.state_region
+  allowed_account_ids = [var.account_id]
+
+  default_tags {
+    tags = {
+      Project = "id-vault"
+      Owner   = "valocity-digital"
+      Managed = "terraform"
+    }
+  }
+}
