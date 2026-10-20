@@ -1,0 +1,47 @@
+# Local app stack (walking skeleton). Run: docker compose up --build
+# Then open http://localhost:3000
+#
+# Credentials below are for local development only and never leave this machine.
+
+services:
+  db:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_DB: mhp
+      POSTGRES_USER: mhp
+      POSTGRES_PASSWORD: mhp-local-only
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mhp -d mhp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: ./app/api
+    environment:
+      DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
+    ports:
+      - "8000:8000"   # API docs at http://localhost:8000/docs
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./app/web
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  # Local stand-in for SQS. Not used by the skeleton yet; ready for the Doc Vault upload flow.
+  queue:
+    image: softwaremill/elasticmq-native:1.7.1
+    ports:
+      - "9325:9325"   # web UI
+
+volumes:
+  pgdata:

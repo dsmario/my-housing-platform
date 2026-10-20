@@ -12,3 +12,12 @@ override.tf.json
 *_override.tf.json
 *.tfplan
 tfplan
+
+# App
+node_modules/
+.next/
+next-env.d.ts
+__pycache__/
+*.pyc
+.env
+.env.*
