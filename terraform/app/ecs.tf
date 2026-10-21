@@ -43,9 +43,12 @@ resource "aws_iam_role_policy" "execution_db_secret" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = "secretsmanager:GetSecretValue"
-      Resource = aws_db_instance.this.master_user_secret[0].secret_arn
+      Effect = "Allow"
+      Action = "secretsmanager:GetSecretValue"
+      Resource = [
+        aws_db_instance.this.master_user_secret[0].secret_arn,
+        aws_secretsmanager_secret.web_auth.arn,
+      ]
     }]
   })
 }
@@ -80,6 +83,9 @@ resource "aws_ecs_task_definition" "api" {
       { name = "DB_HOST", value = aws_db_instance.this.address },
       { name = "DB_PORT", value = tostring(aws_db_instance.this.port) },
       { name = "DB_NAME", value = aws_db_instance.this.db_name },
+      { name = "IDENTITY_PROVIDER", value = "cognito" },
+      { name = "COGNITO_ISSUER", value = local.identity.users_issuer },
+      { name = "COGNITO_CLIENT_ID", value = local.identity.web_client_id },
     ]
     secrets = [
       { name = "DB_USER", valueFrom = "${aws_db_instance.this.master_user_secret[0].secret_arn}:username::" },
@@ -116,6 +122,14 @@ resource "aws_ecs_task_definition" "web" {
       { name = "PORT", value = tostring(local.app_port) },
       # Server-side calls go through the public HTTPS address and the ALB.
       { name = "API_URL", value = "https://${local.hostname}" },
+      { name = "AUTH_URL", value = "https://${local.hostname}/auth" },
+      { name = "AUTH_COGNITO_ID", value = local.identity.web_client_id },
+      { name = "AUTH_COGNITO_ISSUER", value = local.identity.users_issuer },
+      { name = "AUTH_COGNITO_DOMAIN", value = local.identity.login_domain },
+    ]
+    secrets = [
+      { name = "AUTH_SECRET", valueFrom = "${aws_secretsmanager_secret.web_auth.arn}:AUTH_SECRET::" },
+      { name = "AUTH_COGNITO_SECRET", valueFrom = "${aws_secretsmanager_secret.web_auth.arn}:AUTH_COGNITO_SECRET::" },
     ]
     logConfiguration = {
       logDriver = "awslogs"

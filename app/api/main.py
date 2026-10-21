@@ -4,7 +4,9 @@ import os
 from contextlib import asynccontextmanager
 
 import psycopg
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+
+from identity import Principal, current_principal, get_verifier
 
 SEED_TEXT = "Hello from the database. Web, API and Postgres are connected."
 
@@ -26,6 +28,7 @@ def connect():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_verifier()  # Fail at startup if IDENTITY_PROVIDER is missing or wrong.
     # Skeleton only: create and seed the table on startup. Real schema changes
     # will go through migrations.
     with connect() as conn:
@@ -66,4 +69,12 @@ def message():
         "text": text,
         "db_time": db_time.isoformat(),
         "db_version": db_version.split(",")[0],
+    }
+
+
+@app.get("/api/me")
+def me(principal: Principal = Depends(current_principal)):
+    return {
+        "username": principal.username,
+        "groups": list(principal.groups),
     }

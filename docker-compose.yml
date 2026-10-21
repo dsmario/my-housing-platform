@@ -2,6 +2,7 @@
 # Then open http://localhost:3000
 #
 # Credentials below are for local development only and never leave this machine.
+# Sign-in uses the dev Cognito pool; its settings come from .env (see .env.example).
 
 services:
   db:
@@ -22,6 +23,9 @@ services:
     build: ./app/api
     environment:
       DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
+      IDENTITY_PROVIDER: cognito
+      COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
+      COGNITO_CLIENT_ID: ${AUTH_COGNITO_ID:?set in .env}
     ports:
       - "8000:8000"   # API docs at http://localhost:8000/docs
     depends_on:
@@ -32,6 +36,12 @@ services:
     build: ./app/web
     environment:
       API_URL: http://api:8000
+      AUTH_URL: http://localhost:3000/auth
+      AUTH_SECRET: ${AUTH_SECRET:?set in .env}
+      AUTH_COGNITO_ID: ${AUTH_COGNITO_ID:?set in .env}
+      AUTH_COGNITO_SECRET: ${AUTH_COGNITO_SECRET:?set in .env}
+      AUTH_COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
+      AUTH_COGNITO_DOMAIN: ${AUTH_COGNITO_DOMAIN:?set in .env}
     ports:
       - "3000:3000"
     depends_on:
