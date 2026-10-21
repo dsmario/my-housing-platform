@@ -1,4 +1,16 @@
+import { redirect } from "next/navigation";
 import { auth, signIn, signOut } from "../auth";
+
+// Ends the Cognito login-page session too; otherwise the next "Sign in" goes
+// straight through without asking. The return address must be one of the
+// client's registered logout URLs.
+function cognitoLogoutUrl(): string {
+  const appOrigin = new URL(process.env.AUTH_URL ?? "").origin;
+  const url = new URL("/logout", process.env.AUTH_COGNITO_DOMAIN);
+  url.searchParams.set("client_id", process.env.AUTH_COGNITO_ID ?? "");
+  url.searchParams.set("logout_uri", appOrigin);
+  return url.toString();
+}
 
 // Rendered on the server for every request, so the text is always fresh from the API.
 export const dynamic = "force-dynamic";
@@ -83,7 +95,8 @@ export default async function Home() {
           <form
             action={async () => {
               "use server";
-              await signOut({ redirectTo: "/" });
+              await signOut({ redirect: false });
+              redirect(cognitoLogoutUrl());
             }}
           >
             <button type="submit">Sign out</button>
