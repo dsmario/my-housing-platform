@@ -21,3 +21,9 @@ variable "state_region" {
   type        = string
   default     = "us-west-1"
 }
+
+variable "cloudtrail_name" {
+  description = "Name of the account trail in terraform/audit, allowed to encrypt logs with the vault key."
+  type        = string
+  default     = "mhp-account-trail"
+}

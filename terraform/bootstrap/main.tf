@@ -67,6 +67,34 @@ resource "aws_kms_key" "vault" {
   description             = "ID Vault master key (wraps per-youth data keys)"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
+  # Statement 1 is the AWS default (account IAM decides). Doc Vault requires
+  # narrowing it to the application role; that lands with the app's real role.
+  # Statement 2 lets the account CloudTrail trail (terraform/audit) encrypt logs.
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Enable IAM User Permissions"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${local.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowCloudTrailEncryptLogs"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = ["kms:GenerateDataKey*", "kms:DescribeKey"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceArn" = "arn:aws:cloudtrail:${var.region}:${local.account_id}:trail/${var.cloudtrail_name}"
+          }
+        }
+      },
+    ]
+  })
 }
 
 resource "aws_kms_alias" "vault" {
