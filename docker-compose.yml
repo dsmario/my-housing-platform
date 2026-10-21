@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
       IDENTITY_PROVIDER: cognito
+      SEED_DATA: "true"
       COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
       COGNITO_CLIENT_ID: ${AUTH_COGNITO_ID:?set in .env}
     ports:

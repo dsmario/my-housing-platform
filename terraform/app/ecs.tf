@@ -84,6 +84,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "DB_PORT", value = tostring(aws_db_instance.this.port) },
       { name = "DB_NAME", value = aws_db_instance.this.db_name },
       { name = "IDENTITY_PROVIDER", value = "cognito" },
+      # Dev holds test data only, so the seed script runs. Production leaves this unset.
+      { name = "SEED_DATA", value = var.environment == "dev" ? "true" : "false" },
       { name = "COGNITO_ISSUER", value = local.identity.users_issuer },
       { name = "COGNITO_CLIENT_ID", value = local.identity.web_client_id },
     ]

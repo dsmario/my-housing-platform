@@ -6,10 +6,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py identity.py ./
+COPY alembic.ini db.py identity.py main.py seed.py start.sh ./
+COPY migrations ./migrations
 
 RUN useradd --create-home app
 USER app
 
 EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "./start.sh"]
