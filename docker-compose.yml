@@ -2,10 +2,13 @@
 # Then open http://localhost:3000
 #
 # Credentials below are for local development only and never leave this machine.
+# Containers restart on their own when Docker Desktop starts, unless stopped with
+# "docker compose stop" or "down".
 # Sign-in uses the dev Cognito pool; its settings come from .env (see .env.example).
 
 services:
   db:
+    restart: unless-stopped
     image: postgres:16.15-alpine
     environment:
       POSTGRES_DB: mhp
@@ -23,6 +26,7 @@ services:
 
   api:
     build: ./app/api
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
       IDENTITY_PROVIDER: cognito
@@ -37,6 +41,7 @@ services:
 
   web:
     build: ./app/web
+    restart: unless-stopped
     environment:
       API_URL: http://api:8000
       AUTH_URL: http://localhost:3000/auth
@@ -52,6 +57,7 @@ services:
 
   # Local stand-in for SQS. Not used by the skeleton yet; ready for the Doc Vault upload flow.
   queue:
+    restart: unless-stopped
     image: softwaremill/elasticmq-native:1.7.1
     ports:
       - "9325:9325"   # web UI
