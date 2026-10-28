@@ -19,8 +19,8 @@
   ],
 
   "containerEnv": {
-    "AWS_REGION": "us-west-1",
-    "AWS_DEFAULT_REGION": "us-west-1",
+    "AWS_REGION": "us-west-2",
+    "AWS_DEFAULT_REGION": "us-west-2",
     "AWS_PROFILE": "mhp"
   },
 

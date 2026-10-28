@@ -18,7 +18,7 @@ if ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/nu
   fi
 else
   echo "AWS is not configured yet. In the container terminal, run: aws configure"
-  echo "Use region us-west-1. Then run: bash .devcontainer/check-env.sh"
+  echo "Use region us-west-2. Then run: bash .devcontainer/check-env.sh"
 fi
 
 exit 0
