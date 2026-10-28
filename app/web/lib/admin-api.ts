@@ -76,11 +76,13 @@ export async function adminFetch<T>(path: string, init?: RequestInit): Promise<T
 }
 
 // For pages: an unknown table or row shows the "not found" page instead of an error.
+// Signed out or not an admin: stop quietly. The admin layout renders on its own
+// and already shows the sign-in screen, so this page's output is never shown.
 export async function adminPage<T>(path: string): Promise<T> {
   try {
     return await adminFetch<T>(path);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) notFound();
+    if (e instanceof ApiError && [401, 403, 404].includes(e.status)) notFound();
     throw e;
   }
 }
