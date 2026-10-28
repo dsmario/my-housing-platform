@@ -62,14 +62,15 @@ resource "random_password" "auth_secret" {
 
 resource "aws_secretsmanager_secret" "web_auth" {
   name                    = "${local.name}/web-auth"
-  description             = "Auth.js session secret and Cognito web client secret."
+  description             = "Auth.js session secret and Cognito web client secrets (users and staff)."
   recovery_window_in_days = 7
 }
 
 resource "aws_secretsmanager_secret_version" "web_auth" {
   secret_id = aws_secretsmanager_secret.web_auth.id
   secret_string = jsonencode({
-    AUTH_SECRET         = random_password.auth_secret.result
-    AUTH_COGNITO_SECRET = local.identity.web_client_secret
+    AUTH_SECRET               = random_password.auth_secret.result
+    AUTH_COGNITO_SECRET       = local.identity.web_client_secret
+    AUTH_STAFF_COGNITO_SECRET = local.identity.staff_web_client_secret
   })
 }

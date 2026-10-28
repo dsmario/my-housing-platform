@@ -245,6 +245,49 @@ resource "aws_cognito_user_group" "staff_support" {
   description  = "Staff-assisted account recovery and user support."
 }
 
+# Staff sign-in for the web app's /admin pages. A Cognito-provided login domain
+# (no certificate or DNS): staff don't need a branded address.
+resource "aws_cognito_user_pool_domain" "staff" {
+  domain                = "${local.name}-staff"
+  user_pool_id          = aws_cognito_user_pool.staff.id
+  managed_login_version = 2
+}
+
+resource "aws_cognito_user_pool_client" "staff_web" {
+  name                                 = "${local.name}-staff-web"
+  user_pool_id                         = aws_cognito_user_pool.staff.id
+  generate_secret                      = true
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  supported_identity_providers         = ["COGNITO"]
+  callback_urls = [
+    "${local.app_url}${var.staff_auth_callback_path}",
+    "${var.local_app_url}${var.staff_auth_callback_path}",
+  ]
+  logout_urls = ["${local.app_url}/admin", "${var.local_app_url}/admin"]
+  explicit_auth_flows = [
+    "ALLOW_USER_SRP_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+  ]
+  prevent_user_existence_errors = "ENABLED"
+  enable_token_revocation       = true
+  access_token_validity         = 60
+  id_token_validity             = 60
+  refresh_token_validity        = 12
+  token_validity_units {
+    access_token  = "minutes"
+    id_token      = "minutes"
+    refresh_token = "hours"
+  }
+}
+
+resource "aws_cognito_managed_login_branding" "staff_web" {
+  user_pool_id                = aws_cognito_user_pool.staff.id
+  client_id                   = aws_cognito_user_pool_client.staff_web.id
+  use_cognito_provided_values = true
+}
+
 # ---------------------------------------------------------------------------
 # Email: SES identity for dev.myhousingplatform.org with DKIM. While SES is in
 # sandbox, mail only reaches verified addresses. Production access is requested

@@ -1,0 +1,121 @@
+/* Admin pages are wider than the 40rem body, so they break out of it and
+   center on the window. */
+.admin {
+  width: min(96vw, 80rem);
+  margin-left: calc(50% - min(48vw, 40rem));
+}
+
+.admin-header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #ddd;
+}
+.admin-header form {
+  margin-left: auto;
+}
+
+.admin a {
+  color: #0b5c8a;
+}
+
+.muted {
+  color: #666;
+}
+
+.notice {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #eef5f9;
+  margin: 1rem 0;
+}
+.error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #fbeaea;
+  color: #a3231a;
+  margin: 1rem 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: #eee;
+  white-space: nowrap;
+}
+.badge-edit {
+  background: #e3f3e6;
+  color: #1d5e2b;
+}
+.badge-summary {
+  background: #fdf1dc;
+  color: #7a4b00;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+.admin table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.admin th,
+.admin td {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+.admin th {
+  background: #f6f6f6;
+  white-space: nowrap;
+}
+.cell {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pager {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+}
+.field input,
+.field select,
+.field textarea {
+  font: inherit;
+  padding: 0.4rem;
+  max-width: 40rem;
+}
+.field textarea {
+  font-family: ui-monospace, monospace;
+  min-height: 6rem;
+}
+.field small {
+  color: #666;
+}
+
+.actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+.danger {
+  color: #a3231a;
+}

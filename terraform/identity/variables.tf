@@ -29,6 +29,12 @@ variable "auth_callback_path" {
   default     = "/auth/callback/cognito"
 }
 
+variable "staff_auth_callback_path" {
+  description = "Where the Next.js app receives a staff sign-in result (Auth.js provider id cognito-staff)."
+  type        = string
+  default     = "/auth/callback/cognito-staff"
+}
+
 variable "local_app_url" {
   description = "Local stack origin, allowed as a sign-in callback for development."
   type        = string

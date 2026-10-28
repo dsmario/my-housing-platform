@@ -88,6 +88,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "SEED_DATA", value = var.environment == "dev" ? "true" : "false" },
       { name = "COGNITO_ISSUER", value = local.identity.users_issuer },
       { name = "COGNITO_CLIENT_ID", value = local.identity.web_client_id },
+      { name = "STAFF_COGNITO_ISSUER", value = local.identity.staff_issuer },
+      { name = "STAFF_COGNITO_CLIENT_ID", value = local.identity.staff_web_client_id },
     ]
     secrets = [
       { name = "DB_USER", valueFrom = "${aws_db_instance.this.master_user_secret[0].secret_arn}:username::" },
@@ -128,10 +130,14 @@ resource "aws_ecs_task_definition" "web" {
       { name = "AUTH_COGNITO_ID", value = local.identity.web_client_id },
       { name = "AUTH_COGNITO_ISSUER", value = local.identity.users_issuer },
       { name = "AUTH_COGNITO_DOMAIN", value = local.identity.login_domain },
+      { name = "AUTH_STAFF_COGNITO_ID", value = local.identity.staff_web_client_id },
+      { name = "AUTH_STAFF_COGNITO_ISSUER", value = local.identity.staff_issuer },
+      { name = "AUTH_STAFF_COGNITO_DOMAIN", value = local.identity.staff_login_domain },
     ]
     secrets = [
       { name = "AUTH_SECRET", valueFrom = "${aws_secretsmanager_secret.web_auth.arn}:AUTH_SECRET::" },
       { name = "AUTH_COGNITO_SECRET", valueFrom = "${aws_secretsmanager_secret.web_auth.arn}:AUTH_COGNITO_SECRET::" },
+      { name = "AUTH_STAFF_COGNITO_SECRET", valueFrom = "${aws_secretsmanager_secret.web_auth.arn}:AUTH_STAFF_COGNITO_SECRET::" },
     ]
     logConfiguration = {
       logDriver = "awslogs"

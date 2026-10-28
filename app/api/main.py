@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 
+import admin
 from db import connect
 from identity import Principal, current_principal, get_verifier
 
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MHP API", lifespan=lifespan)
+app.include_router(admin.router)
 
 
 @app.get("/api/health")
@@ -49,4 +51,5 @@ def me(principal: Principal = Depends(current_principal)):
     return {
         "username": principal.username,
         "groups": list(principal.groups),
+        "pool": principal.pool,
     }

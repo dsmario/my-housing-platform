@@ -23,3 +23,21 @@ output "login_domain" {
 output "staff_pool_id" {
   value = aws_cognito_user_pool.staff.id
 }
+
+output "staff_issuer" {
+  description = "OIDC issuer the API uses to verify staff tokens."
+  value       = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.staff.id}"
+}
+
+output "staff_web_client_id" {
+  value = aws_cognito_user_pool_client.staff_web.id
+}
+
+output "staff_web_client_secret" {
+  value     = aws_cognito_user_pool_client.staff_web.client_secret
+  sensitive = true
+}
+
+output "staff_login_domain" {
+  value = "https://${aws_cognito_user_pool_domain.staff.domain}.auth.${var.region}.amazoncognito.com"
+}

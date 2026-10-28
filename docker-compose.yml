@@ -33,6 +33,9 @@ services:
       SEED_DATA: "true"
       COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
       COGNITO_CLIENT_ID: ${AUTH_COGNITO_ID:?set in .env}
+      # Optional: staff sign-in for /admin. Empty = staff tokens refused.
+      STAFF_COGNITO_ISSUER: ${AUTH_STAFF_COGNITO_ISSUER:-}
+      STAFF_COGNITO_CLIENT_ID: ${AUTH_STAFF_COGNITO_ID:-}
     ports:
       - "8000:8000"   # API docs at http://localhost:8000/docs
     depends_on:
@@ -50,6 +53,10 @@ services:
       AUTH_COGNITO_SECRET: ${AUTH_COGNITO_SECRET:?set in .env}
       AUTH_COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
       AUTH_COGNITO_DOMAIN: ${AUTH_COGNITO_DOMAIN:?set in .env}
+      AUTH_STAFF_COGNITO_ID: ${AUTH_STAFF_COGNITO_ID:-}
+      AUTH_STAFF_COGNITO_SECRET: ${AUTH_STAFF_COGNITO_SECRET:-}
+      AUTH_STAFF_COGNITO_ISSUER: ${AUTH_STAFF_COGNITO_ISSUER:-}
+      AUTH_STAFF_COGNITO_DOMAIN: ${AUTH_STAFF_COGNITO_DOMAIN:-}
     ports:
       - "3000:3000"
     depends_on:

@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY alembic.ini db.py identity.py main.py seed.py start.sh ./
+COPY alembic.ini admin.py db.py identity.py main.py seed.py start.sh ./
 COPY migrations ./migrations
 
 RUN useradd --create-home app
