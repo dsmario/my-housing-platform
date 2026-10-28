@@ -42,6 +42,19 @@ services:
       db:
         condition: service_healthy
 
+  # API tests. Not started by "up"; run: docker compose run --rm api-test
+  # Creates and drops its own database (mhp_test_*), never touches mhp.
+  api-test:
+    profiles: ["test"]
+    build:
+      context: ./app/api
+      target: test
+    environment:
+      TEST_ADMIN_DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     build: ./app/web
     restart: unless-stopped

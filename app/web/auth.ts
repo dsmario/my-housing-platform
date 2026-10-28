@@ -94,8 +94,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return refreshAccessToken(token);
     },
     async session({ session, token }) {
-      // The access token goes to server code calling the API. Follow-up: keep it
-      // out of the browser-readable session endpoint.
+      // For server code calling the API. The /auth/session route strips it, so
+      // it never reaches the browser (app/auth/[...nextauth]/route.ts).
       session.accessToken = token.accessToken;
       session.provider = token.provider;
       session.error = token.error;
