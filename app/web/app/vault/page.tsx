@@ -93,7 +93,8 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
       )}
       {documents.some((d) => d.status === "rejected") && (
         <p className="muted">
-          Not accepted means the file failed our safety check or isn't a PDF, JPG, PNG or HEIC file.
+          Not accepted means the file failed our safety check, couldn't be read, or isn't a PDF, JPG, PNG or HEIC
+          file.
         </p>
       )}
       <RefreshWhileChecking active={checking} />

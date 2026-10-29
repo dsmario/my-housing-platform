@@ -305,8 +305,8 @@ resource "aws_ecs_task_definition" "vault_worker" {
   family                   = "${local.name}-vault-worker"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  cpu                      = 512 # rebuilding images and PDFs (sanitize.py) needs more than the API
+  memory                   = 1024
   execution_role_arn       = aws_iam_role.execution.arn
   task_role_arn            = aws_iam_role.vault_worker.arn
   runtime_platform {

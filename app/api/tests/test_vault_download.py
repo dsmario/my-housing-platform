@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 from fakes import FakeS3
+from samples import page_count, pdf_pages
 
 import vault
 import vault_keys
@@ -26,8 +27,9 @@ def youth() -> dict:
     return {"Authorization": f"Bearer stub:youth-{uuid.uuid4().hex[:10]}:youth"}
 
 
-def add_document(client, s3, headers, data=b"%PDF-1.4\nmy lease", title="My lease", ready=True) -> str:
+def add_document(client, s3, headers, data=None, title="My lease", ready=True) -> str:
     """Upload, land in quarantine, scan clean, and (if ready) let the worker move it to the vault."""
+    data = data or pdf_pages(1)
     body = client.post(
         "/api/vault/uploads",
         json={"title": title, "category": "housing", "content_type": "application/pdf", "size_bytes": len(data)},
@@ -93,12 +95,12 @@ def test_deleted_documents_are_not_listed(client, s3):
 # Download ------------------------------------------------------------------------
 
 
-def test_owner_downloads_the_exact_file(client, s3):
+def test_owner_downloads_the_cleaned_file(client, s3):
     me = youth()
     doc = add_document(client, s3, me, title="My lease")
     r = get_file(client, doc, me)
     assert r.status_code == 200
-    assert r.content == b"%PDF-1.4\nmy lease"
+    assert r.content.startswith(b"%PDF") and page_count(r.content) == 1
     assert r.headers["content-type"] == "application/pdf"
     assert r.headers["cache-control"] == "no-store"
     assert r.headers["x-content-type-options"] == "nosniff"
@@ -146,7 +148,7 @@ def test_destroyed_key_means_the_file_cannot_be_opened(client, s3):
         vault_keys.destroy_youth_key(conn, owner_of(doc))
     r = get_file(client, doc, me)
     assert r.status_code == 410
-    assert b"my lease" not in r.content
+    assert not r.content.startswith(b"%PDF")
     assert downloads(doc)[-1][3] == "key destroyed"
 
 
@@ -157,7 +159,7 @@ def test_changed_file_in_storage_is_refused(client, s3):
     stored[-1] ^= 1
     s3.objects[(VAULT, f"documents/{doc}")] = bytes(stored)
     r = get_file(client, doc, me)
-    assert r.status_code == 500 and b"my lease" not in r.content
+    assert r.status_code == 500 and not r.content.startswith(b"%PDF")
     assert downloads(doc)[-1][:1] == ("denied",) and downloads(doc)[-1][3] == "decrypt failed"
 
 
@@ -180,3 +182,7 @@ def test_download_name_is_safe():
     assert vault.download_name("scan.PDF", "application/pdf") == "scan.PDF"
     assert vault.download_name("scan", "image/png") == "scan.png"
     assert vault.download_name("photo.jpg", "image/jpeg") == "photo.jpg"
+    assert vault.download_name("photo.jpeg", "image/jpeg") == "photo.jpeg"
+    # Cleaning stored a HEIC as JPEG: the old ending is swapped, not stacked.
+    assert vault.download_name("IMG_1234.HEIC", "image/jpeg") == "IMG_1234.jpg"
+    assert vault.download_name("v1.2 lease", "application/pdf") == "v1.2%20lease.pdf"

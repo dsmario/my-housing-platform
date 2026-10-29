@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY alembic.ini admin.py db.py identity.py local_scanner.py main.py people.py seed.py start.sh \
+COPY alembic.ini admin.py db.py identity.py local_scanner.py main.py people.py sanitize.py seed.py start.sh \
      vault.py vault_keys.py vault_worker.py ./
 COPY migrations ./migrations
 

@@ -6,3 +6,6 @@ cryptography==50.0.2
 alembic==1.20.0
 SQLAlchemy==2.1.4
 boto3==1.43.114
+Pillow==12.3.0
+pillow-heif==1.8.1
+pypdfium2==5.14.0

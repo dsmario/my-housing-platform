@@ -254,8 +254,17 @@ def list_documents(youth: Youth = Depends(current_youth)):
 
 
 def download_name(title: str, content_type: str) -> str:
+    """The title with the right ending. Cleaning can change the type (HEIC is
+    stored as JPEG), so an upload's old ending is swapped, not added to."""
     ext = EXTENSIONS.get(content_type, "")
-    name = title if title.lower().endswith(ext) else title + ext
+    endings = {ext, ".jpeg"} if ext == ".jpg" else {ext}
+    stem, dot, old = title.rpartition(".")
+    if "." + old.lower() in endings:
+        name = title
+    elif dot and stem and "." + old.lower() in {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".heif"}:
+        name = stem + ext
+    else:
+        name = title + ext
     return quote(name, safe="")
 
 

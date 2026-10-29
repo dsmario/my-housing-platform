@@ -3,8 +3,13 @@
 import os
 import uuid
 
+import io
+from pathlib import Path
+
 import pytest
 from fakes import FakeS3, FakeSQS
+from PIL import Image
+from samples import jpeg_with_secrets, page_count, pdf_pages, pdf_with_script
 
 import vault_keys
 from db import connect
@@ -13,7 +18,7 @@ from vault_worker import SCAN_TAG, RetryLater, handle, looks_like
 
 QUARANTINE = os.environ["VAULT_QUARANTINE_BUCKET"]
 VAULT = os.environ["VAULT_BUCKET"]
-PDF_BYTES = b"%PDF-1.4\n" + b"x" * 100
+PDF_BYTES = pdf_pages(1)
 
 
 def uploaded(client, s3: FakeS3, data: bytes = PDF_BYTES, content_type="application/pdf", tag="NO_THREATS_FOUND"):
@@ -46,11 +51,21 @@ def process(e: dict, s3) -> str:
 def document(doc: str) -> dict:
     with connect() as conn:
         row = conn.execute(
-            "SELECT status, owner_pseudonym_id::text, quarantine_object_key, vault_object_key, wrapped_document_key"
+            "SELECT status, owner_pseudonym_id::text, quarantine_object_key, vault_object_key, wrapped_document_key,"
+            "       content_type, size_bytes"
             " FROM vault.document WHERE id = %s",
             (doc,),
         ).fetchone()
-    return dict(zip(["status", "owner", "quarantine_key", "vault_key", "wrapped"], row))
+    return dict(zip(["status", "owner", "quarantine_key", "vault_key", "wrapped", "content_type", "size"], row))
+
+
+def stored_file(s3, doc: str) -> bytes:
+    """What the vault holds for the document, decrypted the way the API does it."""
+    d = document(doc)
+    with connect() as conn:
+        youth_key = vault_keys.youth_data_key(conn, d["owner"])
+    document_key = vault_keys.unwrap_document_key(youth_key, d["wrapped"], doc)
+    return vault_keys.decrypt_file(document_key, s3.objects[(VAULT, d["vault_key"])], doc)
 
 
 # Clean files -----------------------------------------------------------------------
@@ -66,12 +81,47 @@ def test_clean_file_is_encrypted_into_the_vault(client):
     assert d["vault_key"] == f"documents/{doc}"
     assert (QUARANTINE, key) not in s3.objects  # quarantine copy deleted
 
-    stored = s3.objects[(VAULT, d["vault_key"])]
-    assert b"x" * 100 not in stored  # encrypted at rest
-    with connect() as conn:
-        youth_key = vault_keys.youth_data_key(conn, d["owner"])
-    document_key = vault_keys.unwrap_document_key(youth_key, d["wrapped"], doc)
-    assert vault_keys.decrypt_file(document_key, stored, doc) == PDF_BYTES
+    clean = stored_file(s3, doc)
+    assert clean.startswith(b"%PDF") and page_count(clean) == 1
+    assert clean not in s3.objects[(VAULT, d["vault_key"])]  # encrypted at rest
+    assert (d["content_type"], d["size"]) == ("application/pdf", len(clean))
+
+
+# Cleaning (§2, §3) -----------------------------------------------------------------
+
+
+def test_photo_is_stored_without_gps_or_hidden_data(client):
+    s3 = FakeS3()
+    doc, key = uploaded(client, s3, data=jpeg_with_secrets(), content_type="image/jpeg")
+    process(event(key, "NO_THREATS_FOUND"), s3)
+    clean = stored_file(s3, doc)
+    assert dict(Image.open(io.BytesIO(clean)).getexif()) == {}
+    assert b"Secret Artist" not in clean and b"<script>" not in clean
+
+
+def test_pdf_is_stored_without_its_script(client):
+    s3 = FakeS3()
+    doc, key = uploaded(client, s3, data=pdf_with_script())
+    process(event(key, "NO_THREATS_FOUND"), s3)
+    clean = stored_file(s3, doc)
+    assert b"JavaScript" not in clean and b"x.exe" not in clean and page_count(clean) == 1
+
+
+def test_heic_is_stored_as_jpeg(client):
+    s3 = FakeS3()
+    heic = (Path(__file__).parent / "fixtures" / "tiny.heic").read_bytes()
+    doc, key = uploaded(client, s3, data=heic, content_type="image/heic")
+    process(event(key, "NO_THREATS_FOUND"), s3)
+    assert document(doc)["content_type"] == "image/jpeg"
+    assert Image.open(io.BytesIO(stored_file(s3, doc))).format == "JPEG"
+
+
+def test_file_that_cannot_be_cleaned_is_rejected(client):
+    s3 = FakeS3()
+    doc, key = uploaded(client, s3, data=b"%PDF-1.4\nnot really a pdf, just the right first bytes")
+    assert "could not be cleaned" in process(event(key, "NO_THREATS_FOUND"), s3)
+    assert document(doc)["status"] == "rejected"
+    assert not any(b == VAULT for b, _ in s3.objects)
 
 
 def test_repeated_message_is_harmless(client):

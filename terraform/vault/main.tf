@@ -273,7 +273,7 @@ resource "aws_sqs_queue" "scan_result_dlq" {
 
 resource "aws_sqs_queue" "scan_result" {
   name                       = "${local.prefix}-scan-result"
-  visibility_timeout_seconds = 120
+  visibility_timeout_seconds = 300 # longer than the worst case: 60 s cleaning plus scan checks and S3
   kms_master_key_id          = data.aws_kms_alias.vault.target_key_arn
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.scan_result_dlq.arn

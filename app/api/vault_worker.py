@@ -24,6 +24,7 @@ import signal
 
 import psycopg
 
+import sanitize
 import vault_keys
 from db import connect
 
@@ -95,6 +96,12 @@ def handle(event: dict, s3, conn: psycopg.Connection) -> str:
     if not looks_like(content_type, data[:16]):
         return reject(f"content is not {content_type}")
 
+    # Rebuild it (§2, §3): only the cleaned copy is ever stored.
+    try:
+        data, content_type = sanitize.sanitize(content_type, data)
+    except sanitize.Rejected as e:
+        return reject(f"could not be cleaned: {e}")
+
     youth_key = vault_keys.youth_data_key(conn, owner)
     document_key, wrapped = vault_keys.new_document_key(youth_key, document_id)
     vault_key = f"documents/{document_id}"
@@ -106,8 +113,9 @@ def handle(event: dict, s3, conn: psycopg.Connection) -> str:
     )
     conn.execute(
         "UPDATE vault.document SET status = 'ready', status_changed_at = now(), vault_object_key = %s,"
-        " wrapped_document_key = %s, quarantine_object_key = NULL WHERE id = %s",
-        (vault_key, wrapped, document_id),
+        " wrapped_document_key = %s, quarantine_object_key = NULL, content_type = %s, size_bytes = %s"
+        " WHERE id = %s",
+        (vault_key, wrapped, content_type, len(data), document_id),
     )
     conn.commit()
     try:
