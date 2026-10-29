@@ -6,6 +6,25 @@
 # "docker compose stop" or "down".
 # Sign-in uses the dev Cognito pool; its settings come from .env (see .env.example).
 
+# Doc Vault storage and queue: SeaweedFS stands in for S3, ElasticMQ for SQS.
+x-vault-storage: &vault-storage
+  VAULT_QUARANTINE_BUCKET: quarantine
+  VAULT_BUCKET: vault
+  VAULT_S3_ENDPOINT: http://storage:8333
+  VAULT_SQS_ENDPOINT: http://queue:9324
+  VAULT_SCAN_QUEUE_URL: http://queue:9324/000000000000/vault-scan-result
+  AWS_ACCESS_KEY_ID: mhp-local
+  AWS_SECRET_ACCESS_KEY: mhp-local-only
+  AWS_DEFAULT_REGION: us-east-1
+
+# Doc Vault, everything that reads or writes documents: storage plus the
+# database and keys. A local key stands in for KMS (Doc Vault §13).
+x-vault: &vault
+  <<: *vault-storage
+  DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
+  VAULT_KEY_PROVIDER: local
+  VAULT_LOCAL_KEY: ${VAULT_LOCAL_KEY:?set in .env}
+
 services:
   db:
     restart: unless-stopped
@@ -28,7 +47,7 @@ services:
     build: ./app/api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://mhp:mhp-local-only@db:5432/mhp
+      <<: *vault
       IDENTITY_PROVIDER: cognito
       SEED_DATA: "true"
       COGNITO_ISSUER: ${AUTH_COGNITO_ISSUER:?set in .env}
@@ -36,11 +55,17 @@ services:
       # Optional: staff sign-in for /admin. Empty = staff tokens refused.
       STAFF_COGNITO_ISSUER: ${AUTH_STAFF_COGNITO_ISSUER:-}
       STAFF_COGNITO_CLIENT_ID: ${AUTH_STAFF_COGNITO_ID:-}
+      # Browsers upload straight to storage, at this address.
+      VAULT_S3_PUBLIC_ENDPOINT: http://localhost:8333
+      # The web server vouches for the youth's IP and browser in audit rows (local value).
+      API_FORWARD_SECRET: mhp-local-only-forward
     ports:
       - "8000:8000"   # API docs at http://localhost:8000/docs
     depends_on:
       db:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
 
   # API tests. Not started by "up"; run: docker compose run --rm api-test
   # Creates and drops its own database (mhp_test_*), never touches mhp.
@@ -60,6 +85,7 @@ services:
     restart: unless-stopped
     environment:
       API_URL: http://api:8000
+      API_FORWARD_SECRET: mhp-local-only-forward
       AUTH_URL: http://localhost:3000/auth
       AUTH_SECRET: ${AUTH_SECRET:?set in .env}
       AUTH_COGNITO_ID: ${AUTH_COGNITO_ID:?set in .env}
@@ -75,12 +101,87 @@ services:
     depends_on:
       - api
 
-  # Local stand-in for SQS. Not used by the skeleton yet; ready for the Doc Vault upload flow.
+  # Local stand-in for SQS: carries Doc Vault scan results (queue made by storage-init).
   queue:
     restart: unless-stopped
     image: softwaremill/elasticmq-native:1.7.1
     ports:
       - "9325:9325"   # web UI
 
+  # Local stand-in for S3 (Doc Vault §13). SeaweedFS replaces MinIO, which no
+  # longer publishes images. Only the web app's origin may upload from a browser.
+  storage:
+    restart: unless-stopped
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo '{"identities":[{"name":"local","credentials":[{"accessKey":"mhp-local","secretKey":"mhp-local-only"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > /etc/seaweedfs/s3.json
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -s3.allowedOrigins=http://localhost:3000 \
+          -volume.max=100 -master.volumeSizeLimitMB=64
+    ports:
+      - "127.0.0.1:8333:8333"   # this machine only; browsers upload here
+    volumes:
+      - storagedata:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Creates the buckets and the scan result queue, then exits. Safe to run again.
+  storage-init:
+    image: amazon/aws-cli:2.37.12
+    environment:
+      AWS_ACCESS_KEY_ID: mhp-local
+      AWS_SECRET_ACCESS_KEY: mhp-local-only
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://storage:8333
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for b in quarantine vault; do
+          aws s3api head-bucket --bucket $$b 2>/dev/null || aws s3api create-bucket --bucket $$b
+        done
+        aws s3api put-bucket-cors --bucket quarantine --cors-configuration \
+          '{"CORSRules":[{"AllowedOrigins":["http://localhost:3000"],"AllowedMethods":["POST"],"AllowedHeaders":["*"],"MaxAgeSeconds":300}]}'
+        echo "buckets ready"
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          aws sqs create-queue --endpoint-url http://queue:9324 --queue-name vault-scan-result > /dev/null && break
+          sleep 2
+        done
+        echo "queue ready"
+    depends_on:
+      storage:
+        condition: service_healthy
+      queue:
+        condition: service_started
+
+  # Doc Vault worker: scan result -> checks -> encrypt -> vault (Doc Vault §3).
+  # Same image as the API, as in AWS.
+  vault-worker:
+    build: ./app/api
+    restart: unless-stopped
+    command: ["python", "vault_worker.py"]
+    environment: *vault
+    depends_on:
+      api:
+        condition: service_started   # the API runs the migrations
+      storage-init:
+        condition: service_completed_successfully
+
+  # Stand-in for GuardDuty malware scanning, which only exists in AWS. Flags the
+  # EICAR test file. Storage and queue only: no database, no keys.
+  local-scanner:
+    build: ./app/api
+    restart: unless-stopped
+    command: ["python", "local_scanner.py"]
+    environment: *vault-storage
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+
 volumes:
   pgdata:
+  storagedata:

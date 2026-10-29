@@ -1,0 +1,107 @@
+.vault a {
+  color: #0b5c8a;
+}
+
+.vault .muted {
+  color: #555;
+}
+
+.vault-upload {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+.vault-upload h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.vault-upload label {
+  display: grid;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+.vault-upload label.inline {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-right: 1rem;
+  font-weight: normal;
+}
+.vault-upload fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.vault-upload legend {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.vault-upload input[type="text"],
+.vault-upload input:not([type]) {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+}
+.vault-upload p {
+  margin: 0;
+}
+.vault-upload button {
+  justify-self: start;
+  font: inherit;
+  padding: 0.45rem 1rem;
+}
+
+.vault-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.vault-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #eee;
+}
+.vault-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.vault-status {
+  font-size: 0.9rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #f1f1f1;
+}
+.vault-status-ready {
+  background: #e6f4ea;
+  color: #1e6b34;
+}
+.vault-status-rejected {
+  background: #fbeaea;
+  color: #a3231a;
+}
+
+/* Phones: title on its own line, details below. */
+@media (max-width: 30rem) {
+  .vault-list li {
+    grid-template-columns: 1fr auto;
+  }
+  .vault-title {
+    grid-column: 1 / -1;
+  }
+}
+
+.vault .notice {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #eef5f9;
+}
+.vault .error {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #fbeaea;
+  color: #a3231a;
+}

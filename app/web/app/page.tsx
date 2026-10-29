@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signIn, signOut } from "../auth";
 
@@ -24,6 +25,7 @@ type Message = {
 type Me = {
   username: string;
   groups: string[];
+  pool: string;
 };
 
 async function getMessage(): Promise<Message> {
@@ -92,6 +94,11 @@ export default async function Home() {
             {me.groups.length > 0 && <> ({me.groups.join(", ")})</>}. The API verified your
             Cognito token.
           </p>
+          {me.pool === "users" && me.groups.includes("youth") && (
+            <p>
+              <Link href="/vault">My documents</Link>
+            </p>
+          )}
           <form
             action={async () => {
               "use server";

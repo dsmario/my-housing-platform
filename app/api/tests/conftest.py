@@ -48,8 +48,18 @@ def migrate(url: str, target: str = "head", down: bool = False) -> None:
             os.environ["DATABASE_URL"] = previous
 
 
-# Set before the app is imported: stub tokens, and the test database.
+# Set before the app is imported: stub tokens, local vault keys, and the test database.
 os.environ["IDENTITY_PROVIDER"] = "stub"
+os.environ["VAULT_KEY_PROVIDER"] = "local"
+os.environ["VAULT_LOCAL_KEY"] = "dGVzdC1vbmx5LWxvY2FsLXZhdWx0LWtleS0zMmJ5dGU="
+# Presigned POSTs are signed locally; tests never contact S3.
+os.environ["VAULT_QUARANTINE_BUCKET"] = "test-quarantine"
+os.environ["VAULT_BUCKET"] = "test-vault"
+os.environ["API_FORWARD_SECRET"] = "test-forward-secret"
+os.environ["VAULT_S3_PUBLIC_ENDPOINT"] = "http://storage.test:8333"
+os.environ["AWS_ACCESS_KEY_ID"] = "test"
+os.environ["AWS_SECRET_ACCESS_KEY"] = "test"
+os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 _DB_NAME = f"mhp_test_{uuid.uuid4().hex[:8]}"
 os.environ["DATABASE_URL"] = create_database(_DB_NAME)
 

@@ -2,7 +2,7 @@
 
 - youth_data_key: one wrapped (encrypted) data key per youth. Never plaintext.
   Destroying it (wrapped_key = NULL) makes all that youth's documents unreadable.
-- document: metadata only; file bytes live in S3 (MinIO locally). Deleting a
+- document: metadata only; file bytes live in S3 (SeaweedFS locally). Deleting a
   document removes its wrapped key in the same transaction (crypto-shredding).
 - audit_event: append-only. Each row carries a hash of the previous row, so an
   edit or deletion breaks the chain. UPDATE, DELETE and TRUNCATE are refused.

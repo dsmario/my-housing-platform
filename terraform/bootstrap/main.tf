@@ -71,6 +71,8 @@ resource "aws_kms_key" "vault" {
   # Statement 1 is the AWS default (account IAM decides). Doc Vault requires
   # narrowing it to the application role; that lands with the app's real role.
   # Statement 2 lets the account CloudTrail trail (terraform/audit) encrypt logs.
+  # Statement 3 lets EventBridge put GuardDuty scan results on the scan result
+  # queue, which this key encrypts (terraform/vault).
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -90,6 +92,18 @@ resource "aws_kms_key" "vault" {
         Condition = {
           StringEquals = {
             "aws:SourceArn" = "arn:aws:cloudtrail:${var.region}:${local.account_id}:trail/${var.cloudtrail_name}"
+          }
+        }
+      },
+      {
+        Sid       = "AllowEventBridgeScanResults"
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource  = "*"
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:events:${var.region}:${local.account_id}:rule/${local.name_prefix}-*-scan-result"
           }
         }
       },
@@ -137,6 +151,20 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit" {
       kms_master_key_id = aws_kms_key.vault.arn
     }
   }
+}
+
+# Audit records expire once their lock does (Doc Vault §10); Object Lock prevents
+# anything earlier. Old versions go a day later.
+resource "aws_s3_bucket_lifecycle_configuration" "audit" {
+  bucket = aws_s3_bucket.audit.id
+  rule {
+    id     = "expire-after-retention"
+    status = "Enabled"
+    filter {}
+    expiration { days = var.audit_retention_days }
+    noncurrent_version_expiration { noncurrent_days = 1 }
+  }
+  depends_on = [aws_s3_bucket_versioning.audit]
 }
 
 resource "aws_s3_bucket_public_access_block" "audit" {

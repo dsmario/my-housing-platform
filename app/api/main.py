@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException
 
 import admin
+import vault
 from db import connect
 from identity import Principal, current_principal, get_verifier
 
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MHP API", lifespan=lifespan)
 app.include_router(admin.router)
+app.include_router(vault.router)
 
 
 @app.get("/api/health")

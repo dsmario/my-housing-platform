@@ -76,6 +76,16 @@ resource "aws_s3_bucket_lifecycle_configuration" "quarantine" {
     filter {}
     noncurrent_version_expiration { noncurrent_days = var.scan_retention_days }
   }
+  # Safety net (Doc Vault §3): the worker deletes clean files once they reach the
+  # vault, and rejected files stay 7 days for support review. This expires every
+  # object after 7 days, so nothing outlives that, and clears stalled uploads.
+  rule {
+    id     = "expire-rejected"
+    status = "Enabled"
+    filter {}
+    expiration { days = 7 }
+    abort_incomplete_multipart_upload { days_after_initiation = 1 }
+  }
   depends_on = [aws_s3_bucket_versioning.quarantine]
 }
 
@@ -88,6 +98,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "vault" {
     noncurrent_version_expiration { noncurrent_days = var.scan_retention_days }
   }
   depends_on = [aws_s3_bucket_versioning.vault]
+}
+
+# Browsers post uploads straight to quarantine (Doc Vault §3), only from the app.
+resource "aws_s3_bucket_cors_configuration" "quarantine" {
+  bucket = aws_s3_bucket.quarantine.id
+  cors_rule {
+    allowed_origins = [var.app_origin]
+    allowed_methods = ["POST"]
+    allowed_headers = ["*"]
+    max_age_seconds = 300
+  }
 }
 
 # Both buckets: TLS only. Uploads arrive from the browser by presigned POST, so

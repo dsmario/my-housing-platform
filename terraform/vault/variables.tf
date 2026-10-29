@@ -17,3 +17,9 @@ variable "scan_retention_days" {
   type        = number
   default     = 1
 }
+
+variable "app_origin" {
+  description = "The web app's address. Only it may post uploads to quarantine from a browser."
+  type        = string
+  default     = "https://dev.myhousingplatform.org"
+}
