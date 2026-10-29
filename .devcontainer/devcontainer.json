@@ -33,7 +33,10 @@
         "hashicorp.terraform",
         "ms-azuretools.vscode-docker",
         "github.vscode-pull-request-github"
-      ]
+      ],
+      "settings": {
+        "remote.autoForwardPortsFallback": 0
+      }
     }
   }
 }
