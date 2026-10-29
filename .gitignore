@@ -24,3 +24,6 @@ __pycache__/
 .env.*
 !.env.example
 .vscode/
+
+# Confidential documents (never committed; the repo is public)
+private/
