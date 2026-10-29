@@ -213,7 +213,7 @@ def run() -> None:
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
     log.info("waiting for scan results")
-    last_purge = last_audit_check = 0.0
+    last_purge = last_audit_check = float("-inf")  # both run at once on start
     while not stopping:
         if time.monotonic() - last_purge >= PURGE_EVERY_SECONDS:
             last_purge = time.monotonic()
