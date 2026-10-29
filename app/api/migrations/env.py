@@ -8,7 +8,8 @@ from sqlalchemy import create_engine, pool, text
 from db import sqlalchemy_url
 
 if context.config.config_file_name is not None:
-    fileConfig(context.config.config_file_name)
+    # Keep loggers made before migrations run (the API's and worker's, in tests).
+    fileConfig(context.config.config_file_name, disable_existing_loggers=False)
 
 # Any fixed number; all API tasks use it so only one runs migrations at a time.
 MIGRATION_LOCK_ID = 727001

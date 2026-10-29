@@ -221,3 +221,24 @@ def test_local_scanner_flags_the_test_virus_and_sends_guardduty_shaped_results()
     assert sent["uploads/virus"]["detail-type"] == "GuardDuty Malware Protection Object Scan Result"
     assert sent["uploads/virus"]["detail"]["scanResultDetails"]["scanResultStatus"] == "THREATS_FOUND"
     assert scan_once(s3, sqs, QUARANTINE, "q") == []  # each file is scanned once
+
+
+# Alarm signals (§11) ------------------------------------------------------------------
+
+
+def test_audit_chain_check_reports_intact_and_broken(caplog):
+    from vault_worker import check_audit_chain
+
+    with connect() as conn:
+        conn.execute("INSERT INTO vault.audit_event (action, outcome) VALUES ('view', 'allowed')")
+        with caplog.at_level("INFO", logger="vault_worker"):
+            assert check_audit_chain(conn) is None
+        assert "VAULT_AUDIT_CHAIN_OK" in caplog.text
+
+        last = conn.execute("SELECT max(id) FROM vault.audit_event").fetchone()[0]
+        conn.execute("ALTER TABLE vault.audit_event DISABLE TRIGGER audit_event_append_only")
+        conn.execute("UPDATE vault.audit_event SET outcome = 'denied' WHERE id = %s", (last,))
+        caplog.clear()
+        assert check_audit_chain(conn) == last
+        assert f"VAULT_AUDIT_CHAIN_BROKEN at={last}" in caplog.text
+        conn.rollback()  # put the row and the trigger back

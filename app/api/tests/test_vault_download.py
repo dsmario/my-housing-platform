@@ -186,3 +186,17 @@ def test_download_name_is_safe():
     # Cleaning stored a HEIC as JPEG: the old ending is swapped, not stacked.
     assert vault.download_name("IMG_1234.HEIC", "image/jpeg") == "IMG_1234.jpg"
     assert vault.download_name("v1.2 lease", "application/pdf") == "v1.2%20lease.pdf"
+
+
+def test_refusals_and_decrypt_failures_are_logged_for_the_alarms(client, s3, caplog):
+    me = youth()
+    doc = add_document(client, s3, me)
+    with caplog.at_level("WARNING", logger="vault"):
+        get_file(client, doc, youth())
+        assert "VAULT_DOWNLOAD_DENIED reason=not shared with requester" in caplog.text
+        stored = bytearray(s3.objects[(VAULT, f"documents/{doc}")])
+        stored[-1] ^= 1
+        s3.objects[(VAULT, f"documents/{doc}")] = bytes(stored)
+        get_file(client, doc, me)
+        assert f"VAULT_DECRYPT_FAILED document={doc}" in caplog.text
+    assert "My lease" not in caplog.text  # no titles in the logs

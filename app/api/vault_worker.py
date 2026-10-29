@@ -187,6 +187,25 @@ def purge_deleted(s3, conn: psycopg.Connection) -> list[str]:
     return purged
 
 
+# Checks for the alarms (§11) ---------------------------------------------------------
+#
+# Log lines starting VAULT_ are counted by CloudWatch alarms (terraform/app/alarms.tf):
+# a heartbeat every sweep (no heartbeat = worker down), purge failures, and the
+# hourly audit chain check.
+
+AUDIT_CHECK_EVERY_SECONDS = 3600
+
+
+def check_audit_chain(conn: psycopg.Connection) -> int | None:
+    """The id of the first audit row whose hash doesn't match, or None if the chain is intact."""
+    broken = conn.execute("SELECT vault.verify_audit_chain()").fetchone()[0]
+    if broken is None:
+        log.info("VAULT_AUDIT_CHAIN_OK")
+    else:
+        log.error("VAULT_AUDIT_CHAIN_BROKEN at=%s", broken)
+    return broken
+
+
 def run() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     queue_url = os.environ["VAULT_SCAN_QUEUE_URL"]
@@ -194,7 +213,7 @@ def run() -> None:
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
     log.info("waiting for scan results")
-    last_purge = 0.0
+    last_purge = last_audit_check = 0.0
     while not stopping:
         if time.monotonic() - last_purge >= PURGE_EVERY_SECONDS:
             last_purge = time.monotonic()
@@ -203,7 +222,15 @@ def run() -> None:
                     for doc in purge_deleted(s3, conn):
                         log.info("purged %s", doc)
             except Exception:  # noqa: BLE001 - tried again at the next sweep
-                log.exception("purge sweep failed")
+                log.exception("VAULT_PURGE_FAILED")
+            log.info("VAULT_WORKER_HEARTBEAT")
+        if time.monotonic() - last_audit_check >= AUDIT_CHECK_EVERY_SECONDS:
+            last_audit_check = time.monotonic()
+            try:
+                with connect() as conn:
+                    check_audit_chain(conn)
+            except Exception:  # noqa: BLE001 - tried again next hour
+                log.exception("audit chain check failed")
         messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=5, WaitTimeSeconds=20).get(
             "Messages", []
         )

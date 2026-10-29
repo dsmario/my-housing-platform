@@ -66,6 +66,8 @@ from people import (
     set_display_name,
 )
 
+# Log lines starting VAULT_ are counted by CloudWatch alarms (§11, terraform/app/alarms.tf).
+# They carry no names or titles.
 log = logging.getLogger("vault")
 router = APIRouter(prefix="/api/vault")
 
@@ -328,6 +330,7 @@ def download(document_id: uuid.UUID, request: Request, reader: Youth | Supporter
         grant = None
 
         def deny(status: int, message: str, reason: str) -> HTTPException:
+            log.warning("VAULT_DOWNLOAD_DENIED reason=%s", reason)
             audit(conn, request, "download", "denied", reader, owner, doc, {"reason": reason}, grant)
             conn.commit()
             return HTTPException(status, message)
@@ -362,7 +365,7 @@ def download(document_id: uuid.UUID, request: Request, reader: Youth | Supporter
         except vault_keys.KeyDestroyed:
             raise deny(410, "This document can no longer be opened.", "key destroyed") from None
         except vault_keys.DecryptFailed:
-            log.error("decrypt failed for document %s", doc)  # §11: alarm on decrypt failures
+            log.error("VAULT_DECRYPT_FAILED document=%s", doc)
             raise deny(500, "Something went wrong. Try again later.", "decrypt failed") from None
 
         audit(conn, request, "download", "allowed", reader, owner, doc, share_grant_id=grant)

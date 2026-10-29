@@ -35,3 +35,9 @@ variable "worker_role_name" {
   type        = string
   default     = "mhp-dev-vault-worker"
 }
+
+variable "alert_emails" {
+  description = "Who gets Doc Vault alerts (§11). Each address must confirm AWS's subscription email once."
+  type        = list(string)
+  default     = ["davidsmario@valocitydigital.com"]
+}
