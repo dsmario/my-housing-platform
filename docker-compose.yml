@@ -10,6 +10,7 @@
 x-vault-storage: &vault-storage
   VAULT_QUARANTINE_BUCKET: quarantine
   VAULT_BUCKET: vault
+  VAULT_AUDIT_BUCKET: audit
   VAULT_S3_ENDPOINT: http://storage:8333
   VAULT_SQS_ENDPOINT: http://queue:9324
   VAULT_SCAN_QUEUE_URL: http://queue:9324/000000000000/vault-scan-result
@@ -141,7 +142,7 @@ services:
     command:
       - |
         set -e
-        for b in quarantine vault; do
+        for b in quarantine vault audit; do
           aws s3api head-bucket --bucket $$b 2>/dev/null || aws s3api create-bucket --bucket $$b
         done
         aws s3api put-bucket-cors --bucket quarantine --cors-configuration \

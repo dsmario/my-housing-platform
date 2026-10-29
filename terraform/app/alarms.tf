@@ -47,6 +47,25 @@ locals {
       missing     = "notBreaching"
       description = "Doc Vault: purging deleted documents failed. Deleted files may linger in S3. See the vault-worker log."
     }
+    seal-failed = {
+      log_group   = aws_cloudwatch_log_group.vault_worker.name
+      pattern     = "VAULT_SEAL_FAILED"
+      period      = 900
+      threshold   = 1
+      operator    = "GreaterThanOrEqualToThreshold"
+      missing     = "notBreaching"
+      description = "Doc Vault: the daily audit seal failed (chain broken, or the seal didn't read back the same). Seals stop until fixed. See the vault-worker log."
+    }
+    seal-overdue = {
+      log_group   = aws_cloudwatch_log_group.vault_worker.name
+      pattern     = "VAULT_AUDIT_SEALED"
+      period      = 3600
+      evaluations = 26 # every hour of the last 26 without a seal
+      threshold   = 1
+      operator    = "LessThanThreshold"
+      missing     = "breaching"
+      description = "Doc Vault: no audit seal in 26 hours. The audit log isn't being locked away daily. See the vault-worker log."
+    }
     worker-down = {
       log_group   = aws_cloudwatch_log_group.vault_worker.name
       pattern     = "VAULT_WORKER_HEARTBEAT"
@@ -79,7 +98,8 @@ resource "aws_cloudwatch_metric_alarm" "vault" {
   metric_name         = each.key
   statistic           = "Sum"
   period              = each.value.period
-  evaluation_periods  = 1
+  evaluation_periods  = lookup(each.value, "evaluations", 1)
+  datapoints_to_alarm = lookup(each.value, "evaluations", 1)
   threshold           = each.value.threshold
   comparison_operator = each.value.operator
   treat_missing_data  = each.value.missing

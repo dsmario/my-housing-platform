@@ -14,9 +14,9 @@ same shape.
                           to the dead-letter queue.
 
 Every PURGE_EVERY_SECONDS it also purges deleted documents: every S3 version of
-the file is removed for good (§10).
+the file is removed for good (§10). Once a day it seals the audit log (§7).
 
-Settings: VAULT_SCAN_QUEUE_URL, VAULT_QUARANTINE_BUCKET, VAULT_BUCKET, and
+Settings: VAULT_SCAN_QUEUE_URL, VAULT_QUARANTINE_BUCKET, VAULT_BUCKET, VAULT_AUDIT_BUCKET, and
 locally VAULT_S3_ENDPOINT and VAULT_SQS_ENDPOINT. Run: python vault_worker.py
 """
 
@@ -25,6 +25,7 @@ import logging
 import os
 import signal
 import time
+from datetime import datetime, timedelta, timezone
 
 import psycopg
 
@@ -206,6 +207,91 @@ def check_audit_chain(conn: psycopg.Connection) -> int | None:
     return broken
 
 
+# Daily audit seal (§7) ----------------------------------------------------------------
+#
+# Once a day after SEAL_HOUR_UTC, every audit row since the last seal is written to
+# the Object Lock audit bucket (VAULT_AUDIT_BUCKET), where no one can change or
+# delete it for the lock period, then read back and recorded in vault.audit_seal.
+# A missed day is caught up on the next run. If the chain is broken, nothing is
+# sealed (§11: halt seals until investigated).
+#
+# The file is JSON lines: a header (first and last id, the hash the batch starts
+# from, the final hash), then one line per row with the exact text its hash covers,
+# so anyone can recheck the chain from the file alone: row_hash = sha256(prev_hash + payload).
+
+SEAL_HOUR_UTC = 2
+SEAL_CHECK_EVERY_SECONDS = 900
+
+
+class SealRefused(Exception):
+    """The audit chain is broken, or the stored seal didn't read back the same."""
+
+
+def seal_due(conn: psycopg.Connection, now: datetime) -> bool:
+    """Due if there's no seal since the most recent SEAL_HOUR_UTC."""
+    boundary = now.astimezone(timezone.utc).replace(hour=SEAL_HOUR_UTC, minute=0, second=0, microsecond=0)
+    if boundary > now:
+        boundary -= timedelta(days=1)
+    last = conn.execute("SELECT max(sealed_at) FROM vault.audit_seal").fetchone()[0]
+    return last is None or last < boundary
+
+
+def seal_audit(s3, conn: psycopg.Connection, now: datetime | None = None) -> str | None:
+    """Seals the audit rows since the last seal, if a seal is due. Returns the object
+    key written, or None. The caller commits."""
+    conn.execute("SELECT pg_advisory_xact_lock(727003)")  # one sealer at a time
+    now = now or conn.execute("SELECT now()").fetchone()[0]
+    if not seal_due(conn, now):
+        return None
+    broken = check_audit_chain(conn)
+    if broken is not None:
+        raise SealRefused(f"audit chain broken at row {broken}; not sealing")
+
+    after = conn.execute("SELECT coalesce(max(last_event_id), 0) FROM vault.audit_seal").fetchone()[0]
+    rows = conn.execute(
+        "SELECT e.id, e.occurred_at, e.action, e.outcome, e.actor_pseudonym_id, e.youth_pseudonym_id,"
+        "       e.document_id, e.share_grant_id, host(e.ip_address), e.user_agent, e.detail,"
+        "       encode(e.prev_hash, 'hex'), encode(e.row_hash, 'hex'),"
+        "       convert_from(vault.audit_event_payload(e), 'UTF8')"
+        "  FROM vault.audit_event e WHERE e.id > %s ORDER BY e.id",
+        (after,),
+    ).fetchall()
+    if not rows:
+        log.info("VAULT_AUDIT_SEALED rows=0 (nothing new)")
+        return None
+
+    fields = (
+        "id occurred_at action outcome actor_pseudonym_id youth_pseudonym_id document_id share_grant_id"
+        " ip_address user_agent detail prev_hash row_hash payload"
+    ).split()
+    lines = [
+        {
+            "type": "doc-vault-audit-seal",
+            "version": 1,
+            "first_event_id": rows[0][0],
+            "last_event_id": rows[-1][0],
+            "rows": len(rows),
+            "start_hash": rows[0][11],
+            "head_hash": rows[-1][12],
+            "sealed_at": now.astimezone(timezone.utc).isoformat(),
+        }
+    ] + [dict(zip(fields, r)) for r in rows]
+    body = "".join(json.dumps(line, default=str, sort_keys=True) + "\n" for line in lines).encode()
+    key = f"seals/{now.astimezone(timezone.utc):%Y/%m/%d}/{rows[0][0]:012d}-{rows[-1][0]:012d}.jsonl"
+
+    bucket = os.environ["VAULT_AUDIT_BUCKET"]
+    s3.put_object(Bucket=bucket, Key=key, Body=body, ContentType="application/x-ndjson")
+    if s3.get_object(Bucket=bucket, Key=key)["Body"].read() != body:
+        raise SealRefused(f"{key} didn't read back the same")
+    conn.execute(
+        "INSERT INTO vault.audit_seal (sealed_at, first_event_id, last_event_id, head_hash, object_key)"
+        " VALUES (%s, %s, %s, decode(%s, 'hex'), %s)",
+        (now, rows[0][0], rows[-1][0], rows[-1][12], key),
+    )
+    log.info("VAULT_AUDIT_SEALED rows=%d key=%s", len(rows), key)
+    return key
+
+
 def run() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     queue_url = os.environ["VAULT_SCAN_QUEUE_URL"]
@@ -213,7 +299,7 @@ def run() -> None:
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
     log.info("waiting for scan results")
-    last_purge = last_audit_check = float("-inf")  # both run at once on start
+    last_purge = last_audit_check = last_seal_check = float("-inf")  # all run at once on start
     while not stopping:
         if time.monotonic() - last_purge >= PURGE_EVERY_SECONDS:
             last_purge = time.monotonic()
@@ -231,6 +317,13 @@ def run() -> None:
                     check_audit_chain(conn)
             except Exception:  # noqa: BLE001 - tried again next hour
                 log.exception("audit chain check failed")
+        if time.monotonic() - last_seal_check >= SEAL_CHECK_EVERY_SECONDS:
+            last_seal_check = time.monotonic()
+            try:
+                with connect() as conn:
+                    seal_audit(s3, conn)
+            except Exception:  # noqa: BLE001 - tried again at the next check; the alarm counts these
+                log.exception("VAULT_SEAL_FAILED")
         messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=5, WaitTimeSeconds=20).get(
             "Messages", []
         )

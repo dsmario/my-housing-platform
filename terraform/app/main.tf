@@ -67,6 +67,7 @@ locals {
   scan_queue_url    = data.terraform_remote_state.vault.outputs.scan_result_queue
   scan_queue_arn    = "arn:aws:sqs:${var.region}:${var.account_id}:${basename(local.scan_queue_url)}"
   vault_key_arn     = data.terraform_remote_state.bootstrap.outputs.vault_kms_key_arn
+  audit_bucket      = data.terraform_remote_state.bootstrap.outputs.audit_bucket
 }
 
 locals {

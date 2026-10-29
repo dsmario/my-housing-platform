@@ -55,6 +55,7 @@ os.environ["VAULT_LOCAL_KEY"] = "dGVzdC1vbmx5LWxvY2FsLXZhdWx0LWtleS0zMmJ5dGU="
 # Presigned POSTs are signed locally; tests never contact S3.
 os.environ["VAULT_QUARANTINE_BUCKET"] = "test-quarantine"
 os.environ["VAULT_BUCKET"] = "test-vault"
+os.environ["VAULT_AUDIT_BUCKET"] = "test-audit"
 os.environ["API_FORWARD_SECRET"] = "test-forward-secret"
 os.environ["VAULT_S3_PUBLIC_ENDPOINT"] = "http://storage.test:8333"
 os.environ["AWS_ACCESS_KEY_ID"] = "test"

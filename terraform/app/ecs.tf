@@ -139,6 +139,14 @@ resource "aws_iam_role_policy" "vault_worker" {
         }
       },
       {
+        # Daily audit seal (§7): write, then read back to check. No delete: Object Lock
+        # keeps every seal for the lock period anyway.
+        Sid      = "SealAuditLog"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject"]
+        Resource = "arn:aws:s3:::${local.audit_bucket}/seals/*"
+      },
+      {
         Sid      = "UseVaultKey"
         Effect   = "Allow"
         Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
@@ -336,6 +344,7 @@ resource "aws_ecs_task_definition" "vault_worker" {
     command   = ["python", "vault_worker.py"]
     environment = concat(local.db_env, local.vault_env, [
       { name = "VAULT_SCAN_QUEUE_URL", value = local.scan_queue_url },
+      { name = "VAULT_AUDIT_BUCKET", value = local.audit_bucket },
     ])
     secrets = local.db_secrets
     logConfiguration = {
