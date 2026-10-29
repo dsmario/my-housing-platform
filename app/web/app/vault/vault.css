@@ -126,3 +126,18 @@
   letter-spacing: 0.1em;
   font-family: ui-monospace, monospace;
 }
+
+.vault-buttons {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+.vault button.danger {
+  font: inherit;
+  padding: 0.45rem 1rem;
+  background: #a3231a;
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+}

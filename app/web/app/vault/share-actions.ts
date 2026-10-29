@@ -64,3 +64,16 @@ export async function makeCode(_prev: CodeState, form: FormData): Promise<CodeSt
     throw e;
   }
 }
+
+// Youth: delete a document for good (Doc Vault §10). The API removes its key at
+// once; the worker then removes every stored copy.
+export async function deleteDocument(documentId: string): Promise<void> {
+  try {
+    await vaultResponse(`/documents/${encodeURIComponent(documentId)}`, { method: "DELETE" });
+  } catch (e) {
+    if (!(e instanceof ApiError)) throw e;
+    redirect(`/vault?error=${e.status}`);
+  }
+  revalidatePath("/vault");
+  redirect("/vault?deleted=1");
+}

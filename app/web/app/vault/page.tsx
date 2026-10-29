@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { signIn } from "../../auth";
 import { ApiError, vaultFetch, type SharesResponse, type VaultDocument } from "../../lib/vault-api";
-import { categoryLabel, DOWNLOAD_ERROR_OTHER, DOWNLOAD_ERRORS, SHARING, size, STATUS } from "./labels";
+import { categoryLabel, DELETING, DOWNLOAD_ERROR_OTHER, DOWNLOAD_ERRORS, SHARING, size, STATUS } from "./labels";
 import { RefreshWhileChecking } from "./refresh";
 import { stopSharing } from "./share-actions";
 import { UploadForm } from "./upload-form";
@@ -24,9 +24,9 @@ async function loadDocuments(): Promise<VaultDocument[] | "signed-out" | "not-yo
 export default async function VaultPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; shared?: string; stopped?: string }>;
+  searchParams: Promise<{ error?: string; shared?: string; stopped?: string; deleted?: string }>;
 }) {
-  const { error, shared, stopped } = await searchParams;
+  const { error, shared, stopped, deleted } = await searchParams;
   const documents = await loadDocuments();
 
   if (documents === "signed-out") {
@@ -80,6 +80,11 @@ export default async function VaultPage({
           {SHARING.stopped}
         </p>
       )}
+      {deleted && (
+        <p className="notice" role="status">
+          {DELETING.deleted}
+        </p>
+      )}
 
       <UploadForm />
 
@@ -95,17 +100,18 @@ export default async function VaultPage({
                 {categoryLabel(d.category)} · {size(d.size_bytes)}
               </span>
               <span className={`vault-status vault-status-${d.status}`}>{STATUS[d.status] ?? d.status}</span>
-              {d.status === "ready" ? (
-                <span className="vault-actions">
-                  {/* A plain link, not client-side navigation: the response is a file. */}
-                  <a href={`/vault/documents/${d.document_id}`} download>
-                    Download
-                  </a>
-                  <Link href={`/vault/share?document=${d.document_id}`}>{SHARING.shareLink}</Link>
-                </span>
-              ) : (
-                <span />
-              )}
+              <span className="vault-actions">
+                {d.status === "ready" && (
+                  <>
+                    {/* A plain link, not client-side navigation: the response is a file. */}
+                    <a href={`/vault/documents/${d.document_id}`} download>
+                      Download
+                    </a>
+                    <Link href={`/vault/share?document=${d.document_id}`}>{SHARING.shareLink}</Link>
+                  </>
+                )}
+                <Link href={`/vault/delete?document=${d.document_id}`}>{DELETING.link}</Link>
+              </span>
             </li>
           ))}
         </ul>

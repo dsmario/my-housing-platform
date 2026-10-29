@@ -46,3 +46,14 @@ export const SHARING = {
   allIn: (category: string) => `All my ${category} documents`,
   laterNote: "This includes documents you add later.",
 };
+
+// Deleting. DRAFT wording, for review.
+export const DELETING = {
+  link: "Delete",
+  title: "Delete this document?",
+  warning: "This can't be undone. The document will be gone for good, and no one can get it back.",
+  sharedNote: "Anyone you shared it with will lose access right away.",
+  confirm: "Delete forever",
+  cancel: "Keep it",
+  deleted: "Document deleted.",
+};

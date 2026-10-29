@@ -1,9 +1,10 @@
-"""Doc Vault API (Doc Vault §3, §5, §9).
+"""Doc Vault API (Doc Vault §3, §5, §6, §9, §10).
 
   GET  /api/vault/documents                the youth's own documents
   GET  /api/vault/documents/{id}/file      decrypted and streamed by the API (§5), for
                                            the owner or a supporter with a current share
   GET  /api/vault/profile                  role and display name
+  DELETE /api/vault/documents/{id}         youth: delete, can't be undone (§10)
 
 Sharing (§6), at the end of this file:
   POST   /api/vault/share-codes            supporter: a one-use code to give a youth
@@ -341,13 +342,22 @@ def download(document_id: uuid.UUID, request: Request, reader: Youth | Supporter
                 grant = active_share(conn, owner, reader.pseudonym_id, doc, category)
             if grant is None:
                 raise deny(403, CANNOT_OPEN, "not shared with requester")
+        if status != "ready" and grant:
+            # A share only ever shows saved documents; nothing else, not even that it exists.
+            raise deny(403, CANNOT_OPEN, f"status {status}")
+        if status == "deleted":
+            raise deny(410, "This document can no longer be opened.", "deleted")
         if status != "ready":
             raise deny(409, "This document isn't ready yet.", f"status {status}")
 
         try:
+            blob = storage().get_object(Bucket=os.environ["VAULT_BUCKET"], Key=vault_key)["Body"].read()
+        except Exception:  # noqa: BLE001 - e.g. purged after deletion (§10), and the record restored from a backup
+            log.exception("file missing for document %s", doc)
+            raise deny(410, "This document can no longer be opened.", "file missing") from None
+        try:
             youth_key = vault_keys.youth_data_key(conn, owner)
             document_key = vault_keys.unwrap_document_key(youth_key, wrapped, doc)
-            blob = storage().get_object(Bucket=os.environ["VAULT_BUCKET"], Key=vault_key)["Body"].read()
             data = vault_keys.decrypt_file(document_key, blob, doc)
         except vault_keys.KeyDestroyed:
             raise deny(410, "This document can no longer be opened.", "key destroyed") from None
@@ -367,6 +377,44 @@ def download(document_id: uuid.UUID, request: Request, reader: Youth | Supporter
             f" filename*=UTF-8''{download_name(title, content_type)}",
         },
     )
+
+
+# Deleting (§10) ------------------------------------------------------------------
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+def delete_document(document_id: uuid.UUID, request: Request, youth: Youth = Depends(current_youth)):
+    """In one transaction: the document is marked deleted, its wrapped key is
+    removed (so it can't be decrypted again), and shares of this one document
+    stop. The worker then purges every stored version of the file (vault_worker.purge_deleted)."""
+    doc = str(document_id)
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT status FROM vault.document WHERE id = %s AND owner_pseudonym_id = %s FOR UPDATE",
+            (doc, youth.pseudonym_id),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(404, "Document not found.")
+        if row[0] == "deleted":
+            return Response(status_code=204)
+        conn.execute(
+            "UPDATE vault.document SET status = 'deleted', wrapped_document_key = NULL,"
+            " deleted_at = now(), status_changed_at = now() WHERE id = %s",
+            (doc,),
+        )
+        stopped = conn.execute(
+            "UPDATE identity.share_grant g SET revoked_at = now() FROM identity.share_grant_scope s"
+            " WHERE s.share_grant_id = g.id AND g.youth_pseudonym_id = %s AND g.purpose_code = %s"
+            "   AND g.revoked_at IS NULL AND s.field_group_key = 'vault.document' AND s.object_id = %s"
+            " RETURNING g.id",
+            (youth.pseudonym_id, SHARE_PURPOSE, doc),
+        ).fetchall()
+        audit(conn, request, "delete", "allowed", youth, youth.pseudonym_id, doc, {"shares_stopped": len(stopped)})
+        for (grant,) in stopped:
+            audit(
+                conn, request, "revoke", "allowed", youth, youth.pseudonym_id, doc, {"reason": "document deleted"}, str(grant)
+            )
+    return Response(status_code=204)
 
 
 # Sharing (§6) ------------------------------------------------------------------

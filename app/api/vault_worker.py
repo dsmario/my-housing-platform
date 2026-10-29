@@ -13,6 +13,9 @@ same shape.
   ACCESS_DENIED, FAILED   leave the message; the queue retries it, then moves it
                           to the dead-letter queue.
 
+Every PURGE_EVERY_SECONDS it also purges deleted documents: every S3 version of
+the file is removed for good (§10).
+
 Settings: VAULT_SCAN_QUEUE_URL, VAULT_QUARANTINE_BUCKET, VAULT_BUCKET, and
 locally VAULT_S3_ENDPOINT and VAULT_SQS_ENDPOINT. Run: python vault_worker.py
 """
@@ -21,6 +24,7 @@ import json
 import logging
 import os
 import signal
+import time
 
 import psycopg
 
@@ -143,6 +147,46 @@ def clients():
     return s3_client(), boto3.client("sqs", endpoint_url=os.environ.get("VAULT_SQS_ENDPOINT") or None)
 
 
+# Purging deleted documents (§10) ----------------------------------------------------
+
+PURGE_EVERY_SECONDS = 300
+
+
+def delete_all_versions(s3, bucket: str, key: str) -> int:
+    """Permanently removes every version and delete marker of one object. Returns how many."""
+    removed = 0
+    while True:
+        page = s3.list_object_versions(Bucket=bucket, Prefix=key)
+        entries = [v for v in page.get("Versions", []) + page.get("DeleteMarkers", []) if v["Key"] == key]
+        if not entries:
+            return removed
+        for v in entries:
+            version = v.get("VersionId")
+            s3.delete_object(Bucket=bucket, Key=key, **version_args(None if version in (None, "null") else version))
+            removed += 1
+
+
+def purge_deleted(s3, conn: psycopg.Connection) -> list[str]:
+    """Removes every stored version of deleted documents (vault and quarantine), then
+    records purged_at. Until this runs, an old S3 version plus a database backup (which
+    still holds the key) could be read; afterwards there is nothing left to open.
+    Safe to repeat: a failure leaves the rest for the next sweep."""
+    rows = conn.execute(
+        "SELECT id, vault_object_key, quarantine_object_key FROM vault.document"
+        " WHERE status = 'deleted' AND purged_at IS NULL ORDER BY deleted_at LIMIT 50"
+    ).fetchall()
+    purged = []
+    for doc, vault_key, quarantine_key in rows:
+        buckets = os.environ["VAULT_BUCKET"], os.environ["VAULT_QUARANTINE_BUCKET"]
+        for bucket, key in zip(buckets, (vault_key, quarantine_key)):
+            if key:
+                delete_all_versions(s3, bucket, key)
+        conn.execute("UPDATE vault.document SET purged_at = now() WHERE id = %s", (doc,))
+        conn.commit()
+        purged.append(str(doc))
+    return purged
+
+
 def run() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     queue_url = os.environ["VAULT_SCAN_QUEUE_URL"]
@@ -150,7 +194,16 @@ def run() -> None:
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
     log.info("waiting for scan results")
+    last_purge = 0.0
     while not stopping:
+        if time.monotonic() - last_purge >= PURGE_EVERY_SECONDS:
+            last_purge = time.monotonic()
+            try:
+                with connect() as conn:
+                    for doc in purge_deleted(s3, conn):
+                        log.info("purged %s", doc)
+            except Exception:  # noqa: BLE001 - tried again at the next sweep
+                log.exception("purge sweep failed")
         messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=5, WaitTimeSeconds=20).get(
             "Messages", []
         )
