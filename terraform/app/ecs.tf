@@ -123,6 +123,22 @@ resource "aws_iam_role_policy" "vault_worker" {
         Resource = "arn:aws:s3:::${local.vault_bucket}/documents/*"
       },
       {
+        # Purging deleted documents (§10): every version goes, not just the latest.
+        Sid      = "PurgeVaultDocuments"
+        Effect   = "Allow"
+        Action   = ["s3:DeleteObject", "s3:DeleteObjectVersion"]
+        Resource = "arn:aws:s3:::${local.vault_bucket}/documents/*"
+      },
+      {
+        Sid      = "ListVersionsToPurge"
+        Effect   = "Allow"
+        Action   = "s3:ListBucketVersions"
+        Resource = ["arn:aws:s3:::${local.vault_bucket}", "arn:aws:s3:::${local.quarantine_bucket}"]
+        Condition = {
+          StringLike = { "s3:prefix" = ["documents/*", "uploads/*"] }
+        }
+      },
+      {
         Sid      = "UseVaultKey"
         Effect   = "Allow"
         Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
