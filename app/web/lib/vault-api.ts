@@ -57,3 +57,39 @@ export async function vaultResponse(path: string, init?: RequestInit): Promise<R
 export async function vaultFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await vaultResponse(path, init)).json() as Promise<T>;
 }
+
+// Sharing (Doc Vault §6) -----------------------------------------------------
+
+export type Profile = { role: "youth" | "supporter"; display_name: string | null };
+
+export type Share = {
+  share_id: string;
+  supporter: string;
+  supporter_name: string | null;
+  document_id: string | null;
+  document_title: string | null;
+  category: string | null;
+  created_at: string;
+};
+
+export type SharesResponse = {
+  my_name: string | null;
+  shares: Share[];
+  people: { supporter: string; name: string | null }[];
+};
+
+export type SharedResponse = {
+  my_name: string | null;
+  from: { from: string | null; documents: Omit<VaultDocument, "status">[] }[];
+};
+
+// For pages: signed out or the wrong kind of account, instead of an error.
+export async function vaultPage<T>(path: string): Promise<T | "signed-out" | "not-allowed"> {
+  try {
+    return await vaultFetch<T>(path);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return "signed-out";
+    if (e instanceof ApiError && e.status === 403) return "not-allowed";
+    throw e;
+  }
+}

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { signIn } from "../../auth";
-import { ApiError, vaultFetch, type VaultDocument } from "../../lib/vault-api";
-import { categoryLabel, DOWNLOAD_ERROR_OTHER, DOWNLOAD_ERRORS, size, STATUS } from "./labels";
+import { ApiError, vaultFetch, type SharesResponse, type VaultDocument } from "../../lib/vault-api";
+import { categoryLabel, DOWNLOAD_ERROR_OTHER, DOWNLOAD_ERRORS, SHARING, size, STATUS } from "./labels";
 import { RefreshWhileChecking } from "./refresh";
+import { stopSharing } from "./share-actions";
 import { UploadForm } from "./upload-form";
 import "./vault.css";
 
@@ -20,8 +21,12 @@ async function loadDocuments(): Promise<VaultDocument[] | "signed-out" | "not-yo
   }
 }
 
-export default async function VaultPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function VaultPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; shared?: string; stopped?: string }>;
+}) {
+  const { error, shared, stopped } = await searchParams;
   const documents = await loadDocuments();
 
   if (documents === "signed-out") {
@@ -50,6 +55,7 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
     );
   }
 
+  const { shares } = await vaultFetch<SharesResponse>("/shares");
   const checking = documents.some((d) => d.status === "uploading" || d.status === "scanning");
   return (
     <main className="vault">
@@ -62,6 +68,16 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
       {error && (
         <p className="error" role="alert">
           {DOWNLOAD_ERRORS[error] ?? DOWNLOAD_ERROR_OTHER}
+        </p>
+      )}
+      {shared && (
+        <p className="notice" role="status">
+          {SHARING.shared}
+        </p>
+      )}
+      {stopped && (
+        <p className="notice" role="status">
+          {SHARING.stopped}
         </p>
       )}
 
@@ -80,10 +96,13 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
               </span>
               <span className={`vault-status vault-status-${d.status}`}>{STATUS[d.status] ?? d.status}</span>
               {d.status === "ready" ? (
-                // A plain link, not client-side navigation: the response is a file.
-                <a href={`/vault/documents/${d.document_id}`} download>
-                  Download
-                </a>
+                <span className="vault-actions">
+                  {/* A plain link, not client-side navigation: the response is a file. */}
+                  <a href={`/vault/documents/${d.document_id}`} download>
+                    Download
+                  </a>
+                  <Link href={`/vault/share?document=${d.document_id}`}>{SHARING.shareLink}</Link>
+                </span>
               ) : (
                 <span />
               )}
@@ -97,6 +116,29 @@ export default async function VaultPage({ searchParams }: { searchParams: Promis
           file.
         </p>
       )}
+
+      <h2>{SHARING.sectionTitle}</h2>
+      {shares.length === 0 ? (
+        <p className="muted">{SHARING.noShares}</p>
+      ) : (
+        <ul className="vault-list vault-shares">
+          {shares.map((s) => (
+            <li key={s.share_id}>
+              <span className="vault-title">{s.supporter_name ?? "Someone"}</span>
+              <span>
+                {s.document_title ?? SHARING.allIn(categoryLabel(s.category ?? "other"))}
+                {s.category && <span className="muted"> · {SHARING.laterNote}</span>}
+              </span>
+              <form action={stopSharing.bind(null, s.share_id)}>
+                <button type="submit">{SHARING.stop}</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p>
+        <Link href="/vault/share">Share a whole type of document</Link>
+      </p>
       <RefreshWhileChecking active={checking} />
     </main>
   );

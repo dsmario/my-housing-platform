@@ -105,3 +105,24 @@
   background: #fbeaea;
   color: #a3231a;
 }
+
+.vault-actions {
+  display: inline-flex;
+  gap: 0.75rem;
+}
+.vault-shares li {
+  grid-template-columns: auto 1fr auto;
+}
+.vault-shares button {
+  font: inherit;
+}
+.vault-upload label.inline-block {
+  display: block;
+  font-weight: normal;
+  margin: 0.25rem 0;
+}
+.share-code {
+  font-size: 1.4rem;
+  letter-spacing: 0.1em;
+  font-family: ui-monospace, monospace;
+}

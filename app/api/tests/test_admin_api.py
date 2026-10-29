@@ -42,7 +42,7 @@ def test_me_reports_the_pool(client):
 
 def test_lists_every_table_with_counts(client):
     tables = client.get("/api/admin/tables", headers=ADMIN).json()
-    assert len(tables) == 29
+    assert len(tables) == 30
     counts = {t["table"]: t["rows"] for t in tables}
     assert counts["identity.account_subject"] == 4
 

@@ -23,6 +23,9 @@ from functools import lru_cache
 import jwt
 from fastapi import HTTPException, Request
 
+# Allowed difference between our clock and Cognito's when checking token times.
+CLOCK_LEEWAY_SECONDS = 30
+
 
 @dataclass(frozen=True)
 class Principal:
@@ -52,6 +55,9 @@ class CognitoVerifier:
                 algorithms=["RS256"],
                 issuer=self.issuer,
                 options={"require": ["exp", "iat", "sub", "token_use", "client_id"]},
+                # Clocks drift (WSL falls seconds behind after sleep), and a token
+                # minted a moment ago would otherwise look issued in the future.
+                leeway=CLOCK_LEEWAY_SECONDS,
             )
         except jwt.PyJWTError as e:
             raise InvalidToken(str(e)) from e

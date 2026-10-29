@@ -99,6 +99,11 @@ export default async function Home() {
               <Link href="/vault">My documents</Link>
             </p>
           )}
+          {me.pool === "users" && me.groups.includes("supporter") && (
+            <p>
+              <Link href="/shared">Shared with me</Link>
+            </p>
+          )}
           <form
             action={async () => {
               "use server";

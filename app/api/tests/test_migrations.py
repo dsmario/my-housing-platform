@@ -24,7 +24,7 @@ def test_upgrade_downgrade_upgrade():
     url = create_database(name)
     try:
         migrate(url)
-        assert schema_table_counts(url) == {"identity": 8, "planning": 17, "vault": 4}
+        assert schema_table_counts(url) == {"identity": 8, "planning": 17, "vault": 5}
 
         migrate(url, "0001", down=True)
         assert schema_table_counts(url) == {}
@@ -33,7 +33,7 @@ def test_upgrade_downgrade_upgrade():
             conn.execute("SELECT 1 FROM messages")  # the baseline table is kept
 
         migrate(url)
-        assert schema_table_counts(url) == {"identity": 8, "planning": 17, "vault": 4}
+        assert schema_table_counts(url) == {"identity": 8, "planning": 17, "vault": 5}
     finally:
         drop_database(name)
 

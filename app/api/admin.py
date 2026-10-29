@@ -78,6 +78,7 @@ TABLES: dict[str, TableRule] = {
     "vault.document": TableRule("read", frozenset({"title", "wrapped_document_key"})),
     "vault.audit_event": TableRule("summary"),
     "vault.audit_seal": TableRule("read"),
+    "vault.share_code": TableRule("read", frozenset({"code_hash"})),
 }
 
 # Newest first, by the first of these the table has.

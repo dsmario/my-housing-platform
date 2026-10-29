@@ -34,3 +34,15 @@ export function size(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// Sharing. DRAFT wording, for review.
+export const SHARING = {
+  shareLink: "Share",
+  sectionTitle: "Who can see your documents",
+  noShares: "You aren't sharing any documents.",
+  stop: "Stop sharing",
+  stopped: "Sharing stopped. They can't open it anymore.",
+  shared: "Shared.",
+  allIn: (category: string) => `All my ${category} documents`,
+  laterNote: "This includes documents you add later.",
+};
