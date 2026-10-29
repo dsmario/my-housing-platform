@@ -111,8 +111,15 @@ resource "aws_s3_bucket_cors_configuration" "quarantine" {
   }
 }
 
-# Both buckets: TLS only. Uploads arrive from the browser by presigned POST, so
-# the bucket policy does not restrict by network path.
+# Bucket policies (Doc Vault §2, §8, §9): TLS only, and each object action is
+# open to exactly the roles that need it. Everyone else is refused, admins
+# included; they can still change these policies, which CloudTrail records.
+locals {
+  api_role    = "arn:aws:iam::${local.account_id}:role/${var.api_role_name}"
+  worker_role = "arn:aws:iam::${local.account_id}:role/${var.worker_role_name}"
+  scan_role   = aws_iam_role.guardduty_scan.arn
+}
+
 resource "aws_s3_bucket_policy" "quarantine" {
   bucket = aws_s3_bucket.quarantine.id
   policy = jsonencode({
@@ -121,6 +128,17 @@ resource "aws_s3_bucket_policy" "quarantine" {
       { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
         Resource = [aws_s3_bucket.quarantine.arn, "${aws_s3_bucket.quarantine.arn}/*"],
       Condition = { Bool = { "aws:SecureTransport" = "false" } } },
+      # Browsers upload with links the API signs; GuardDuty writes a check object.
+      { Sid      = "OnlyApiAndScannerWrite", Effect = "Deny", Principal = "*", Action = "s3:PutObject",
+        Resource = "${aws_s3_bucket.quarantine.arn}/*",
+      Condition = { ArnNotEquals = { "aws:PrincipalArn" = [local.api_role, local.scan_role] } } },
+      # The API never reads quarantine; only the scanner and the worker do.
+      { Sid    = "OnlyWorkerAndScannerRead", Effect = "Deny", Principal = "*",
+        Action = ["s3:GetObject", "s3:GetObjectVersion"], Resource = "${aws_s3_bucket.quarantine.arn}/*",
+      Condition = { ArnNotEquals = { "aws:PrincipalArn" = [local.worker_role, local.scan_role] } } },
+      { Sid    = "OnlyWorkerDeletes", Effect = "Deny", Principal = "*",
+        Action = ["s3:DeleteObject", "s3:DeleteObjectVersion"], Resource = "${aws_s3_bucket.quarantine.arn}/*",
+      Condition = { ArnNotEquals = { "aws:PrincipalArn" = local.worker_role } } },
     ]
   })
 }
@@ -133,6 +151,14 @@ resource "aws_s3_bucket_policy" "vault" {
       { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
         Resource = [aws_s3_bucket.vault.arn, "${aws_s3_bucket.vault.arn}/*"],
       Condition = { Bool = { "aws:SecureTransport" = "false" } } },
+      # Documents are read only by the API, which checks access on every request (§5).
+      { Sid    = "OnlyApiReads", Effect = "Deny", Principal = "*",
+        Action = ["s3:GetObject", "s3:GetObjectVersion"], Resource = "${aws_s3_bucket.vault.arn}/*",
+      Condition = { ArnNotEquals = { "aws:PrincipalArn" = local.api_role } } },
+      # Documents are written and removed only by the worker (§3, §10).
+      { Sid    = "OnlyWorkerWritesAndDeletes", Effect = "Deny", Principal = "*",
+        Action = ["s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion"], Resource = "${aws_s3_bucket.vault.arn}/*",
+      Condition = { ArnNotEquals = { "aws:PrincipalArn" = local.worker_role } } },
     ]
   })
 }

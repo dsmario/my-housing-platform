@@ -23,3 +23,15 @@ variable "app_origin" {
   type        = string
   default     = "https://dev.myhousingplatform.org"
 }
+
+variable "api_role_name" {
+  description = "The Doc Vault API's task role (terraform/app). Only it signs uploads and reads documents."
+  type        = string
+  default     = "mhp-dev-api"
+}
+
+variable "worker_role_name" {
+  description = "The Doc Vault worker's task role (terraform/app). Only it reads quarantine and writes documents."
+  type        = string
+  default     = "mhp-dev-vault-worker"
+}

@@ -27,3 +27,15 @@ variable "cloudtrail_name" {
   type        = string
   default     = "mhp-account-trail"
 }
+
+variable "vault_app_roles" {
+  description = "IAM roles that may use the vault key: the Doc Vault API and worker (terraform/app). Production adds its own."
+  type        = list(string)
+  default     = ["mhp-dev-api", "mhp-dev-vault-worker"]
+}
+
+variable "vault_scan_roles" {
+  description = "GuardDuty malware scan roles (terraform/vault). They use the vault key only through S3."
+  type        = list(string)
+  default     = ["id-vault-dev-guardduty-malware-scan"]
+}

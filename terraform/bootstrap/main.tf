@@ -68,20 +68,45 @@ resource "aws_kms_key" "vault" {
   enable_key_rotation     = true
   deletion_window_in_days = 30
 
-  # Statement 1 is the AWS default (account IAM decides). Doc Vault requires
-  # narrowing it to the application role; that lands with the app's real role.
-  # Statement 2 lets the account CloudTrail trail (terraform/audit) encrypt logs.
-  # Statement 3 lets EventBridge put GuardDuty scan results on the scan result
-  # queue, which this key encrypts (terraform/vault).
+  # Doc Vault §4, §8: only the application uses this key; engineers don't.
+  #   KeyAdministration  account admins manage the key (so it can't be locked
+  #                      out) but can't encrypt, decrypt or create grants.
+  #   AppUsesKey         the app roles (terraform/app): per-youth keys, and S3's
+  #                      encryption of the vault and quarantine buckets.
+  #   GuardDutyScan      reads quarantine for malware scans, through S3 only.
+  #   CloudTrail         encrypts the account trail's logs (terraform/audit).
+  #   EventBridge        puts scan results on the encrypted queue (terraform/vault).
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "Enable IAM User Permissions"
+        Sid       = "KeyAdministration"
         Effect    = "Allow"
         Principal = { AWS = "arn:aws:iam::${local.account_id}:root" }
-        Action    = "kms:*"
+        Action = [
+          "kms:CreateAlias", "kms:UpdateAlias", "kms:DeleteAlias",
+          "kms:DescribeKey", "kms:GetKeyPolicy", "kms:PutKeyPolicy", "kms:GetKeyRotationStatus",
+          "kms:EnableKeyRotation", "kms:DisableKeyRotation", "kms:RotateKeyOnDemand",
+          "kms:EnableKey", "kms:DisableKey", "kms:UpdateKeyDescription",
+          "kms:List*", "kms:TagResource", "kms:UntagResource", "kms:RevokeGrant",
+          "kms:ScheduleKeyDeletion", "kms:CancelKeyDeletion",
+        ]
+        Resource = "*"
+      },
+      {
+        Sid       = "AppUsesKey"
+        Effect    = "Allow"
+        Principal = { AWS = [for role in var.vault_app_roles : "arn:aws:iam::${local.account_id}:role/${role}"] }
+        Action    = ["kms:GenerateDataKey", "kms:Decrypt"]
         Resource  = "*"
+      },
+      {
+        Sid       = "GuardDutyScan"
+        Effect    = "Allow"
+        Principal = { AWS = [for role in var.vault_scan_roles : "arn:aws:iam::${local.account_id}:role/${role}"] }
+        Action    = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource  = "*"
+        Condition = { StringEquals = { "kms:ViaService" = "s3.${var.region}.amazonaws.com" } }
       },
       {
         Sid       = "AllowCloudTrailEncryptLogs"
