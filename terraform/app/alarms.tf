@@ -29,6 +29,15 @@ locals {
       missing     = "notBreaching"
       description = "Doc Vault: 10 or more refused document requests in 5 minutes. Possible misuse of a share or ID guessing. Check the audit log (download, denied)."
     }
+    refusals-one-person = {
+      log_group   = aws_cloudwatch_log_group.api.name
+      pattern     = "VAULT_REFUSALS_ONE_PERSON"
+      period      = 900
+      threshold   = 1
+      operator    = "GreaterThanOrEqualToThreshold"
+      missing     = "notBreaching"
+      description = "Doc Vault: one person had 5 or more document requests refused within 10 minutes. Possible misuse of a share or ID guessing. The api log line names the person's pseudonym; check the audit log."
+    }
     audit-chain-broken = {
       log_group   = aws_cloudwatch_log_group.vault_worker.name
       pattern     = "VAULT_AUDIT_CHAIN_BROKEN"

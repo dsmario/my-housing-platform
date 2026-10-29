@@ -73,3 +73,24 @@ resource "aws_iam_role_policy" "github_deploy" {
   role   = aws_iam_role.github_deploy.id
   policy = data.aws_iam_policy_document.github_deploy.json
 }
+
+# Keep the 10 newest tagged images in each repository; older ones expire. Untagged
+# entries (attestations that belong to tagged images) are left alone. Deployed
+# images are always among the newest, since every deploy pushes a new tag.
+resource "aws_ecr_lifecycle_policy" "keep_recent" {
+  for_each   = { api = aws_ecr_repository.api.name, web = aws_ecr_repository.web.name }
+  repository = each.value
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Keep the 10 newest tagged images"
+      selection = {
+        tagStatus      = "tagged"
+        tagPatternList = ["*"]
+        countType      = "imageCountMoreThan"
+        countNumber    = 10
+      }
+      action = { type = "expire" }
+    }]
+  })
+}

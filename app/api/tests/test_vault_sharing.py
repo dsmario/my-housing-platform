@@ -264,3 +264,27 @@ def test_profile(client):
     assert client.get("/api/vault/profile", headers=sup).json() == {"role": "supporter", "display_name": None}
     new_code(client, sup, name="  Ms.   Lopez ")
     assert client.get("/api/vault/profile", headers=sup).json() == {"role": "supporter", "display_name": "Ms. Lopez"}
+
+
+def test_refreshing_the_list_records_one_view_per_few_minutes(client, s3):
+    me, sup = youth(), supporter()
+    share(client, me, code=new_code(client, sup), document_id=add_document(client, s3, me))
+    with connect() as conn:
+        before = conn.execute("SELECT count(*) FROM vault.audit_event WHERE action = 'view'").fetchone()[0]
+        for _ in range(4):
+            client.get("/api/vault/shared", headers=sup)
+        after = conn.execute("SELECT count(*) FROM vault.audit_event WHERE action = 'view'").fetchone()[0]
+    assert after == before + 1
+
+
+def test_many_refusals_for_one_person_raise_the_alarm_once(client, s3, caplog):
+    doc = add_document(client, s3, youth())
+    guesser = supporter()
+    new_code(client, guesser)  # makes the supporter's records
+    with caplog.at_level("WARNING", logger="vault"):
+        for _ in range(4):
+            assert get_file(client, doc, guesser).status_code == 403
+        assert "VAULT_REFUSALS_ONE_PERSON" not in caplog.text
+        get_file(client, doc, guesser)  # the 5th
+        get_file(client, doc, guesser)  # the 6th doesn't repeat it
+    assert caplog.text.count("VAULT_REFUSALS_ONE_PERSON") == 1

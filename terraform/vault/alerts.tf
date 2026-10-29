@@ -152,3 +152,55 @@ resource "aws_cloudwatch_metric_alarm" "scan_results_stuck" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
   ok_actions          = [aws_sns_topic.alerts.arn]
 }
+
+# 5. IAM Access Analyzer (§9): reviews resource policies (buckets, keys, roles,
+#    queues, topics) whenever they change, and reports any access from outside the
+#    account. Expected outside access is archived by rules below, so only new
+#    findings alert. Account analyzers for external access are free.
+resource "aws_accessanalyzer_analyzer" "account" {
+  analyzer_name = "mhp-${var.environment}-external-access"
+  type          = "ACCOUNT"
+}
+
+# Expected outside access, found on the first scan (all IAM roles, none on Doc Vault
+# data): the AWS Organization's management account and its single sign-on, and our
+# GitHub deploy role (terraform/cicd). Anything else that appears raises an alert.
+resource "aws_accessanalyzer_archive_rule" "organization" {
+  analyzer_name = aws_accessanalyzer_analyzer.account.analyzer_name
+  rule_name     = "organization-management-account"
+  filter {
+    criteria = "principal.AWS"
+    contains = [var.organization_management_account]
+  }
+}
+
+resource "aws_accessanalyzer_archive_rule" "federated" {
+  analyzer_name = aws_accessanalyzer_analyzer.account.analyzer_name
+  rule_name     = "organization-sso-and-github-deploy"
+  filter {
+    criteria = "principal.Federated"
+    eq = [
+      "arn:aws:iam::${local.account_id}:saml-provider/SSOConsoleAccess",
+      "arn:aws:iam::${local.account_id}:oidc-provider/token.actions.githubusercontent.com",
+    ]
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "outside_access_found" {
+  name        = "${local.prefix}-alert-access-analyzer"
+  description = "Doc Vault alert: Access Analyzer found new access from outside the account"
+  event_pattern = jsonencode({
+    source        = ["aws.access-analyzer"]
+    "detail-type" = ["Access Analyzer Finding"]
+    detail        = { status = ["ACTIVE"] }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "outside_access_found" {
+  rule = aws_cloudwatch_event_rule.outside_access_found.name
+  arn  = aws_sns_topic.alerts.arn
+  input_transformer {
+    input_paths    = { type = "$.detail.resourceType", resource = "$.detail.resource", time = "$.time" }
+    input_template = "\"Doc Vault (${var.environment}): Access Analyzer found new access from outside the account to <type> <resource> at <time>. If it isn't expected, check the resource's policy now.\""
+  }
+}

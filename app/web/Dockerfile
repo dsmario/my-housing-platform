@@ -6,6 +6,11 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
+# Unit tests: docker compose run --rm web-test
+FROM build AS test
+CMD ["npm", "test"]
+
+# The image that runs (last stage, so a plain build gives this one).
 FROM node:24.22.0-alpine
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0

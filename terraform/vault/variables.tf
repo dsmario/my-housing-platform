@@ -41,3 +41,9 @@ variable "alert_emails" {
   type        = list(string)
   default     = ["davidsmario@valocitydigital.com"]
 }
+
+variable "organization_management_account" {
+  description = "The AWS Organization's management account. Its access to this account is expected (Access Analyzer archive rule)."
+  type        = string
+  default     = "470228994731"
+}

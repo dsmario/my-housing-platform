@@ -6,6 +6,7 @@
 // with API_FORWARD_SECRET to show they come from here.
 import { headers } from "next/headers";
 import { accessToken, ApiError } from "./admin-api";
+import { lastForwardedIp } from "./forwarded";
 
 export { ApiError };
 
@@ -21,13 +22,11 @@ export type VaultDocument = {
 
 export type PresignedPost = { url: string; fields: Record<string, string> };
 
-// Behind the AWS load balancer, the last x-forwarded-for entry is the address it
-// saw. Earlier entries come from the browser and can't be trusted.
 async function clientHeaders(): Promise<Record<string, string>> {
   const h = await headers();
-  const forwarded = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
   const out: Record<string, string> = { "X-MHP-Web-Secret": process.env.API_FORWARD_SECRET ?? "" };
-  if (forwarded.length) out["X-MHP-Client-IP"] = forwarded[forwarded.length - 1];
+  const ip = lastForwardedIp(h.get("x-forwarded-for"));
+  if (ip) out["X-MHP-Client-IP"] = ip;
   const agent = h.get("user-agent");
   if (agent) out["X-MHP-Client-UA"] = agent;
   return out;

@@ -3,21 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { finishUpload, startUpload } from "./actions";
+import { fileType } from "./file-type";
 import { CATEGORIES, MAX_BYTES } from "./labels";
-
-// Browsers often leave the type empty for HEIC photos, so the extension decides then.
-const TYPE_BY_EXTENSION: Record<string, string> = {
-  pdf: "application/pdf",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  heic: "image/heic",
-};
-
-function fileType(file: File): string {
-  if (file.type) return file.type === "image/heif" ? "image/heic" : file.type;
-  return TYPE_BY_EXTENSION[file.name.split(".").pop()?.toLowerCase() ?? ""] ?? "";
-}
 
 export function UploadForm() {
   const router = useRouter();

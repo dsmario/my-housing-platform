@@ -81,6 +81,13 @@ services:
       db:
         condition: service_healthy
 
+  # Web unit tests. Not started by "up"; run: docker compose run --rm web-test
+  web-test:
+    profiles: ["test"]
+    build:
+      context: ./app/web
+      target: test
+
   web:
     build: ./app/web
     restart: unless-stopped

@@ -279,6 +279,23 @@ def list_documents(youth: Youth = Depends(current_youth)):
     ]
 
 
+VIEW_LOG_SECONDS = 300
+REFUSAL_BURST = 5  # refused downloads by one person ...
+REFUSAL_BURST_MINUTES = 10  # ... within this many minutes raise an alarm (§11)
+
+
+def refusal_burst(conn: psycopg.Connection, reader: Youth | Supporter) -> None:
+    """§11: denied requests above baseline for one person (possible misuse of a
+    share, or ID guessing). Logged once, when the count reaches REFUSAL_BURST."""
+    count = conn.execute(
+        "SELECT count(*) FROM vault.audit_event WHERE action = 'download' AND outcome = 'denied'"
+        "   AND actor_pseudonym_id = %s AND occurred_at > now() - make_interval(mins => %s)",
+        (reader.pseudonym_id, REFUSAL_BURST_MINUTES),
+    ).fetchone()[0]
+    if count == REFUSAL_BURST:
+        log.warning("VAULT_REFUSALS_ONE_PERSON actor=%s count=%d minutes=%d", reader.pseudonym_id, count, REFUSAL_BURST_MINUTES)
+
+
 def download_name(title: str, content_type: str) -> str:
     """The title with the right ending. Cleaning can change the type (HEIC is
     stored as JPEG), so an upload's old ending is swapped, not added to."""
@@ -332,6 +349,7 @@ def download(document_id: uuid.UUID, request: Request, reader: Youth | Supporter
         def deny(status: int, message: str, reason: str) -> HTTPException:
             log.warning("VAULT_DOWNLOAD_DENIED reason=%s", reason)
             audit(conn, request, "download", "denied", reader, owner, doc, {"reason": reason}, grant)
+            refusal_burst(conn, reader)
             conn.commit()
             return HTTPException(status, message)
 
@@ -668,7 +686,14 @@ def shared_with_me(request: Request, supporter: Supporter = Depends(current_supp
                 }
             )
         for owner, group in groups.items():
-            audit(conn, request, "view", "allowed", supporter, owner, detail={"documents": len(group["documents"])})
+            # One view per youth per few minutes: page refreshes don't flood the log.
+            recent = conn.execute(
+                "SELECT 1 FROM vault.audit_event WHERE action = 'view' AND actor_pseudonym_id = %s"
+                "   AND youth_pseudonym_id = %s AND occurred_at > now() - make_interval(secs => %s)",
+                (supporter.pseudonym_id, owner, VIEW_LOG_SECONDS),
+            ).fetchone()
+            if recent is None:
+                audit(conn, request, "view", "allowed", supporter, owner, detail={"documents": len(group["documents"])})
             group["documents"].sort(key=lambda d: d["created_at"], reverse=True)
         my_name = display_name(conn, supporter.subject_id)
     return {"my_name": my_name, "from": sorted(groups.values(), key=lambda g: (g["from"] or "").lower())}

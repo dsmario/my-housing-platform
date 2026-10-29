@@ -47,12 +47,13 @@ standard EICAR antivirus test file). The database keeps its data between runs.
 
 ```
 docker compose run --rm api-test
+docker compose run --rm web-test
 ```
 
-The tests create and drop their own database (`mhp_test_*`); your local data isn't
-touched. They never call AWS: S3, SQS and KMS are faked.
-
-The web app has no unit tests yet; `docker compose build web` runs the TypeScript check.
+The API tests create and drop their own database (`mhp_test_*`); your local data
+isn't touched. They never call AWS: S3, SQS and KMS are faked. The web tests
+(Vitest) cover the pieces of the pages that hold logic, and building the web image
+runs the TypeScript check.
 
 ## Deploy to dev
 
