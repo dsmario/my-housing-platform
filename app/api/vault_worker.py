@@ -228,6 +228,9 @@ def expire_unfinished_uploads(s3, conn: psycopg.Connection) -> list[str]:
 # hourly audit chain check.
 
 AUDIT_CHECK_EVERY_SECONDS = 3600
+# After a failed check (say the worker started just before the API ran a
+# migration), try again soon rather than in an hour.
+AUDIT_CHECK_RETRY_SECONDS = 300
 
 
 def check_audit_chain(conn: psycopg.Connection) -> int | None:
@@ -246,6 +249,17 @@ def check_audit_chain(conn: psycopg.Connection) -> int | None:
     else:
         log.error("VAULT_AUDIT_CHAIN_BROKEN at=%s", broken)
     return broken
+
+
+def run_audit_check() -> int:
+    """Runs the hourly check. Returns the seconds until the next one."""
+    try:
+        with connect() as conn:
+            check_audit_chain(conn)
+    except Exception:  # noqa: BLE001 - tried again soon
+        log.exception("audit chain check failed; trying again in %d s", AUDIT_CHECK_RETRY_SECONDS)
+        return AUDIT_CHECK_RETRY_SECONDS
+    return AUDIT_CHECK_EVERY_SECONDS
 
 
 # Daily audit seal (§7) ----------------------------------------------------------------
@@ -340,7 +354,7 @@ def run() -> None:
     stopping = []
     signal.signal(signal.SIGTERM, lambda *_: stopping.append(True))
     log.info("waiting for scan results")
-    last_purge = last_audit_check = last_seal_check = float("-inf")  # all run at once on start
+    last_purge = last_seal_check = next_audit_check = float("-inf")  # all run at once on start
     while not stopping:
         if time.monotonic() - last_purge >= PURGE_EVERY_SECONDS:
             last_purge = time.monotonic()
@@ -357,13 +371,8 @@ def run() -> None:
             except Exception:  # noqa: BLE001 - tried again at the next sweep
                 log.exception("expiring unfinished uploads failed")
             log.info("VAULT_WORKER_HEARTBEAT")
-        if time.monotonic() - last_audit_check >= AUDIT_CHECK_EVERY_SECONDS:
-            last_audit_check = time.monotonic()
-            try:
-                with connect() as conn:
-                    check_audit_chain(conn)
-            except Exception:  # noqa: BLE001 - tried again next hour
-                log.exception("audit chain check failed")
+        if time.monotonic() >= next_audit_check:
+            next_audit_check = time.monotonic() + run_audit_check()
         if time.monotonic() - last_seal_check >= SEAL_CHECK_EVERY_SECONDS:
             last_seal_check = time.monotonic()
             try:

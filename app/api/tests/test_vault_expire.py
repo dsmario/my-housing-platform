@@ -1,6 +1,8 @@
-"""Unfinished uploads expire; the worker's audit chain check shows on Vault health."""
+"""Unfinished uploads expire; the worker's audit chain check shows on Vault health and is retried soon if it fails."""
 
 import os
+
+import psycopg
 
 from fakes import FakeS3
 from test_vault_upload import start, youth
@@ -85,3 +87,15 @@ def test_an_old_chain_check_is_flagged(client):
     assert client.get(HEALTH, headers=ADMIN).json()["audit"]["chain_check_overdue"] is True
     with connect() as conn:
         check_audit_chain(conn)  # leave a fresh one for other tests
+
+
+def test_a_failed_chain_check_is_retried_soon(monkeypatch):
+    import vault_worker
+
+    assert vault_worker.run_audit_check() == vault_worker.AUDIT_CHECK_EVERY_SECONDS
+
+    def missing_table():
+        raise psycopg.errors.UndefinedTable('relation "vault.audit_chain_check" does not exist')
+
+    monkeypatch.setattr(vault_worker, "connect", missing_table)
+    assert vault_worker.run_audit_check() == vault_worker.AUDIT_CHECK_RETRY_SECONDS
