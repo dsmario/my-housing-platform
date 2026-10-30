@@ -22,7 +22,7 @@ export const MENU: MenuSection[] = [
   {
     title: "System",
     items: [
-      { label: "Rules & schemas", href: "/admin/rules", groups: ["admin"] },
+      { label: "Plan settings", href: "/admin/rules", groups: ["admin"] },
       { label: "Tables", href: "/admin/tables", groups: ["admin"], match: "^/admin/[a-z_]+\\.[a-z_]+" },
     ],
   },

@@ -11,10 +11,10 @@ export default async function RulesPage() {
 
   return (
     <>
-      <h1>Rules &amp; schemas</h1>
+      <h1>Plan settings</h1>
       <p className="muted">
-        The settings behind housing plans: rule releases and the schemas they use. These are the only tables
-        staff can edit.
+        Settings for housing plans: rule versions, and the formats for task results and readiness checks.
+        These are the only tables staff can change.
       </p>
       <div className="table-wrap">
         <table>

@@ -5,19 +5,23 @@ export const dynamic = "force-dynamic";
 
 // Doc Vault at a glance: is the audit log intact and sealed, and are deleted
 // files being wiped. Totals only; nothing here names a youth or a document.
-// DRAFT wording, for review.
 
 const STATUS_LABELS: Record<keyof VaultHealth["documents"]["by_status"], string> = {
   ready: "Ready",
-  uploading: "Uploading",
+  uploading: "Upload started, not finished",
   scanning: "Being checked for viruses",
-  rejected: "Rejected (not allowed or unsafe)",
+  rejected: "Rejected (wrong file type, too big, or unsafe)",
   deleted: "Deleted by the youth",
 };
 
 // "2026-10-30 02:00 UTC": the same on every screen, and matches the AWS alarms.
 function utc(iso: string): string {
   return `${iso.slice(0, 16).replace("T", " ")} UTC`;
+}
+
+// "1 record", "5 records".
+function count(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 export default async function VaultHealthPage() {
@@ -35,7 +39,7 @@ export default async function VaultHealthPage() {
 
       <h2>Audit log</h2>
       <p>
-        <b>{audit.total}</b> audit records.{" "}
+        <b>{count(audit.total, "audit record", "audit records")}</b>.{" "}
         <Link href="/admin/vault.audit_event">Details</Link>
       </p>
       {audit.chain_broken_at == null ? (
@@ -43,13 +47,13 @@ export default async function VaultHealthPage() {
       ) : (
         <p className="error">
           Integrity check failed at record {audit.chain_broken_at}. A record may have been changed or removed.
-          Daily seals are stopped until this is checked. Report this to the security lead.
+          Daily seals are paused until someone checks this. Report this to the security lead.
         </p>
       )}
 
       <h2>Daily seal</h2>
       <p className="muted">
-        Each night the audit records are copied to locked storage that no one can change or delete.
+        Once a day, new audit records are copied to locked storage. No one can change or delete them there.
       </p>
       {audit.last_seal ? (
         <p>
@@ -61,13 +65,13 @@ export default async function VaultHealthPage() {
       )}
       {audit.unsealed > 0 && (
         <p>
-          <b>{audit.unsealed}</b> newer records will be in the next seal
-          {audit.oldest_unsealed_at && <> (oldest from {utc(audit.oldest_unsealed_at)})</>}.
+          <b>{count(audit.unsealed, "record is", "records are")}</b> waiting for the next seal
+          {audit.oldest_unsealed_at && <> (oldest: {utc(audit.oldest_unsealed_at)})</>}.
         </p>
       )}
       {audit.seal_overdue && (
         <p className="error">
-          The seal is late: some records have waited more than {audit.seal_overdue_hours} hours. Check the
+          The seal is late. Some records have waited more than {audit.seal_overdue_hours} hours. Check the
           vault worker.
         </p>
       )}
@@ -87,14 +91,14 @@ export default async function VaultHealthPage() {
       </div>
       {documents.purge_waiting > 0 && (
         <p>
-          <b>{documents.purge_waiting}</b> deleted files are waiting to be wiped from storage. This
-          normally takes a few minutes.
+          <b>{count(documents.purge_waiting, "deleted file is", "deleted files are")}</b> waiting to be wiped
+          from storage. This normally takes a few minutes.
         </p>
       )}
       {documents.purge_overdue > 0 && (
         <p className="error">
-          {documents.purge_overdue} deleted files have waited more than {documents.purge_overdue_minutes}{" "}
-          minutes to be wiped. Check the vault worker.
+          {count(documents.purge_overdue, "deleted file has", "deleted files have")} waited more than{" "}
+          {documents.purge_overdue_minutes} minutes to be wiped. Check the vault worker.
         </p>
       )}
     </>
