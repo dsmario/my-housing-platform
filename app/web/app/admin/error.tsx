@@ -10,7 +10,7 @@ export default function AdminError({ error }: { error: Error & { digest?: string
       <p className="error">This page couldn't load. It may not exist, or the API may be down.</p>
       {error.digest && <p className="muted">Reference: {error.digest}</p>}
       <p>
-        <Link href="/admin">Back to all tables</Link>
+        <Link href="/admin/tables">Back to all tables</Link>
       </p>
     </div>
   );

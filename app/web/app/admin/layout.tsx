@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { auth, signIn, signOut, staffSignInEnabled } from "../../auth";
 import { accessToken } from "../../lib/admin-api";
 import "./admin.css";
+import { menuFor } from "./menu";
+import { SideNav } from "./side-nav";
 
 export const dynamic = "force-dynamic";
 
@@ -46,19 +48,21 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const session = await auth();
   const isStaffSession = session?.provider === "cognito-staff";
 
+  // Only the admin group for now; the support group gets its own menu later (menu.ts).
   if (me?.pool === "staff" && me.groups.includes("admin")) {
     return (
-      <div className="admin">
+      <div className="admin admin-shell">
         <header className="admin-header">
-          <Link href="/admin">
-            <b>MHP admin</b>
+          <Link href="/admin" className="admin-brand">
+            MHP Admin
           </Link>
-          <span className="muted">
-            Signed in as {me.username} (staff admin)
+          <span className="muted admin-who">
+            {session?.user?.email ?? me.username} ({me.groups.includes("admin") ? "admin" : "support"})
           </span>
           <SignOutButton staff />
         </header>
-        {children}
+        <SideNav sections={menuFor(me.groups)} />
+        <main className="admin-main">{children}</main>
       </div>
     );
   }

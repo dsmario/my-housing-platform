@@ -31,7 +31,7 @@ export default async function TablePage({ params, searchParams }: Props) {
   return (
     <>
       <p>
-        <Link href="/admin">← All tables</Link>
+        <Link href="/admin/tables">← All tables</Link>
       </p>
       <h1>
         {table} <ModeBadge mode={data.mode} />

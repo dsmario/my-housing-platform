@@ -7,7 +7,7 @@ export default function AdminNotFound() {
       <h1>Not found</h1>
       <p>That table or row doesn't exist.</p>
       <p>
-        <Link href="/admin">Back to all tables</Link>
+        <Link href="/admin/tables">Back to all tables</Link>
       </p>
     </>
   );
