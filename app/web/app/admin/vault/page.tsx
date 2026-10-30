@@ -96,8 +96,8 @@ export default async function VaultHealthPage() {
       {documents.stuck_checking > 0 && (
         <p className="error">
           {count(documents.stuck_checking, "document has", "documents have")} been &ldquo;checking&rdquo; for over{" "}
-          {documents.stuck_checking_minutes} minutes. The file arrived but no virus scan result came. Check the
-          scan queue and the vault worker.
+          {documents.stuck_checking_minutes} minutes with no virus scan result. Check the scan queue and the vault
+          worker.
         </p>
       )}
       {documents.purge_waiting > 0 && (
