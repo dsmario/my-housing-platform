@@ -6,7 +6,7 @@ const item = (label: string) => MENU.flatMap((s) => s.items).find((i) => i.label
 
 describe("admin menu", () => {
   it("shows admins everything", () => {
-    expect(items(["admin"])).toEqual(["Dashboard", "Tables"]);
+    expect(items(["admin"])).toEqual(["Dashboard", "Vault health", "Rules & schemas", "Tables"]);
   });
   it("hides admin-only items from support staff", () => {
     expect(items(["support"])).toEqual(["Dashboard"]);
@@ -27,5 +27,11 @@ describe("admin menu", () => {
       expect(isActive(item("Tables"), path)).toBe(true);
     }
     expect(isActive(item("Tables"), "/admin")).toBe(false);
+  });
+  it("highlights the new pages on their own, not as tables", () => {
+    expect(isActive(item("Vault health"), "/admin/vault")).toBe(true);
+    expect(isActive(item("Rules & schemas"), "/admin/rules")).toBe(true);
+    expect(isActive(item("Tables"), "/admin/vault")).toBe(false);
+    expect(isActive(item("Tables"), "/admin/rules")).toBe(false);
   });
 });

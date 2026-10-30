@@ -91,3 +91,22 @@ export async function adminPage<T>(path: string): Promise<T> {
 export function editableColumns(columns: Column[]): Column[] {
   return columns.filter((c) => !c.hidden && c.name !== "id" && c.name !== "created_at");
 }
+
+export type VaultHealth = {
+  audit: {
+    total: number;
+    last_event_id: number | null;
+    chain_broken_at: number | null;
+    unsealed: number;
+    oldest_unsealed_at: string | null;
+    seal_overdue: boolean;
+    seal_overdue_hours: number;
+    last_seal: { sealed_at: string; first_event_id: number; last_event_id: number; object_key: string } | null;
+  };
+  documents: {
+    by_status: Record<"uploading" | "scanning" | "ready" | "rejected" | "deleted", number>;
+    purge_waiting: number;
+    purge_overdue: number;
+    purge_overdue_minutes: number;
+  };
+};

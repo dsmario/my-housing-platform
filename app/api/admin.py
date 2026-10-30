@@ -359,3 +359,61 @@ def delete_row(table: str, row_id: str):
         raise db_error(e) from None
     if deleted == 0:
         raise HTTPException(404, "Row not found")
+
+
+# Vault health ------------------------------------------------------------------
+#
+# Totals and timestamps only: nothing here names a youth or a document (PRIV-1).
+
+DOCUMENT_STATUSES = ("uploading", "scanning", "ready", "rejected", "deleted")
+# The worker seals once a day; the seal-overdue alarm fires after 26 hours.
+SEAL_OVERDUE_HOURS = 26
+# The worker purges every 5 minutes, so an hour means something is wrong.
+PURGE_OVERDUE_MINUTES = 60
+
+
+@router.get("/vault-health")
+def vault_health():
+    with connect() as conn:
+        chain_broken_at = conn.execute("SELECT vault.verify_audit_chain()").fetchone()[0]
+        total, last_id = conn.execute("SELECT count(*), max(id) FROM vault.audit_event").fetchone()
+        seal = conn.execute(
+            "SELECT sealed_at, first_event_id, last_event_id, object_key"
+            "  FROM vault.audit_seal ORDER BY last_event_id DESC LIMIT 1"
+        ).fetchone()
+        unsealed, oldest_unsealed, seal_overdue = conn.execute(
+            "SELECT count(*), min(occurred_at), coalesce(min(occurred_at) < now() - make_interval(hours => %s), false)"
+            "  FROM vault.audit_event WHERE id > coalesce((SELECT max(last_event_id) FROM vault.audit_seal), 0)",
+            (SEAL_OVERDUE_HOURS,),
+        ).fetchone()
+        by_status = dict(conn.execute("SELECT status, count(*) FROM vault.document GROUP BY status").fetchall())
+        purge_waiting, purge_overdue = conn.execute(
+            "SELECT count(*), count(*) FILTER (WHERE deleted_at < now() - make_interval(mins => %s))"
+            "  FROM vault.document WHERE status = 'deleted' AND purged_at IS NULL",
+            (PURGE_OVERDUE_MINUTES,),
+        ).fetchone()
+    return {
+        "audit": {
+            "total": total,
+            "last_event_id": last_id,
+            "chain_broken_at": chain_broken_at,
+            "unsealed": unsealed,
+            "oldest_unsealed_at": to_json(oldest_unsealed),
+            "seal_overdue": seal_overdue,
+            "seal_overdue_hours": SEAL_OVERDUE_HOURS,
+            "last_seal": None
+            if seal is None
+            else {
+                "sealed_at": to_json(seal[0]),
+                "first_event_id": seal[1],
+                "last_event_id": seal[2],
+                "object_key": seal[3],
+            },
+        },
+        "documents": {
+            "by_status": {s: by_status.get(s, 0) for s in DOCUMENT_STATUSES},
+            "purge_waiting": purge_waiting,
+            "purge_overdue": purge_overdue,
+            "purge_overdue_minutes": PURGE_OVERDUE_MINUTES,
+        },
+    }

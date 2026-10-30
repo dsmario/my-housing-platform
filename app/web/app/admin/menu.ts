@@ -18,9 +18,13 @@ export type MenuSection = { title: string | null; items: MenuItem[] };
 
 export const MENU: MenuSection[] = [
   { title: null, items: [{ label: "Dashboard", href: "/admin", groups: ["admin", "support"] }] },
+  { title: "Doc Vault", items: [{ label: "Vault health", href: "/admin/vault", groups: ["admin"] }] },
   {
     title: "System",
-    items: [{ label: "Tables", href: "/admin/tables", groups: ["admin"], match: "^/admin/[a-z_]+\\.[a-z_]+" }],
+    items: [
+      { label: "Rules & schemas", href: "/admin/rules", groups: ["admin"] },
+      { label: "Tables", href: "/admin/tables", groups: ["admin"], match: "^/admin/[a-z_]+\\.[a-z_]+" },
+    ],
   },
 ];
 

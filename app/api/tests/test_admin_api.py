@@ -162,3 +162,35 @@ def test_missing_row(client):
     missing = str(uuid.uuid4())
     assert client.patch(f"{RELEASES}/{missing}", json={"schema_release_id": "x"}, headers=ADMIN).status_code == 404
     assert client.delete(f"{RELEASES}/{missing}", headers=ADMIN).status_code == 404
+
+
+# Vault health -------------------------------------------------------------------
+
+HEALTH = "/api/admin/vault-health"
+
+
+def test_vault_health_is_for_staff_admins_only(client):
+    assert client.get(HEALTH).status_code == 401
+    assert client.get(HEALTH, headers={"Authorization": "Bearer stub:yo:youth"}).status_code == 403
+    assert client.get(HEALTH, headers={"Authorization": "Bearer stub:pat:support:staff"}).status_code == 403
+
+
+def test_vault_health_counts_new_audit_rows_as_waiting_for_the_seal(client):
+    from db import connect
+
+    before = client.get(HEALTH, headers=ADMIN).json()["audit"]
+    with connect() as conn:
+        conn.execute("INSERT INTO vault.audit_event (action, outcome, user_agent) VALUES ('view', 'allowed', 'health-test')")
+    after = client.get(HEALTH, headers=ADMIN).json()["audit"]
+    assert after["chain_broken_at"] is None
+    assert after["total"] == before["total"] + 1
+    assert after["unsealed"] == before["unsealed"] + 1
+    assert after["oldest_unsealed_at"] is not None
+    assert after["seal_overdue"] is False  # the new row is minutes old, not 26 hours
+
+
+def test_vault_health_shows_totals_only(client):
+    docs = client.get(HEALTH, headers=ADMIN).json()["documents"]
+    assert list(docs["by_status"]) == ["uploading", "scanning", "ready", "rejected", "deleted"]
+    assert all(isinstance(n, int) for n in docs["by_status"].values())
+    assert docs["purge_overdue"] <= docs["purge_waiting"]
