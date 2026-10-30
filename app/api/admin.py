@@ -240,7 +240,7 @@ def table_rows(
             result["rows"] = []
             result["total"] = conn.execute(sql.SQL("SELECT count(*) FROM {}").format(ident(table))).fetchone()[0]
             if table == "vault.audit_event":
-                result["chain_broken_at"] = conn.execute("SELECT vault.verify_audit_chain()").fetchone()[0]
+                result.update(last_chain_check(conn))
             return result
 
         names = {c["name"]: c for c in cols}
@@ -365,17 +365,41 @@ def delete_row(table: str, row_id: str):
 #
 # Totals and timestamps only: nothing here names a youth or a document (PRIV-1).
 
-DOCUMENT_STATUSES = ("uploading", "scanning", "ready", "rejected", "deleted")
+DOCUMENT_STATUSES = ("uploading", "scanning", "ready", "rejected", "deleted", "expired")
 # The worker seals once a day; the seal-overdue alarm fires after 26 hours.
 SEAL_OVERDUE_HOURS = 26
 # The worker purges every 5 minutes, so an hour means something is wrong.
 PURGE_OVERDUE_MINUTES = 60
+# The worker checks the audit chain every hour.
+CHAIN_CHECK_OVERDUE_HOURS = 2
+# Scans take minutes, and the worker expires uploads whose file never came after
+# an hour. One still checking after that has a file but no scan result.
+STUCK_CHECKING_MINUTES = 60
+
+
+def last_chain_check(conn) -> dict:
+    """The worker's latest check of the whole audit chain. Re-checking every row on
+    each page load gets slow as the log grows, so the page shows this instead."""
+    row = conn.execute(
+        "SELECT checked_at, last_event_id, chain_broken_at,"
+        "       checked_at < now() - make_interval(hours => %s)"
+        "  FROM vault.audit_chain_check",
+        (CHAIN_CHECK_OVERDUE_HOURS,),
+    ).fetchone()
+    checked_at, last_event_id, broken_at, overdue = row or (None, None, None, True)
+    return {
+        "chain_checked_at": to_json(checked_at),
+        "chain_checked_through": last_event_id,
+        "chain_broken_at": broken_at,
+        "chain_check_overdue": overdue,
+        "chain_check_overdue_hours": CHAIN_CHECK_OVERDUE_HOURS,
+    }
 
 
 @router.get("/vault-health")
 def vault_health():
     with connect() as conn:
-        chain_broken_at = conn.execute("SELECT vault.verify_audit_chain()").fetchone()[0]
+        check = last_chain_check(conn)
         total, last_id = conn.execute("SELECT count(*), max(id) FROM vault.audit_event").fetchone()
         seal = conn.execute(
             "SELECT sealed_at, first_event_id, last_event_id, object_key"
@@ -392,11 +416,16 @@ def vault_health():
             "  FROM vault.document WHERE status = 'deleted' AND purged_at IS NULL",
             (PURGE_OVERDUE_MINUTES,),
         ).fetchone()
+        stuck_checking = conn.execute(
+            "SELECT count(*) FROM vault.document WHERE status IN ('uploading', 'scanning')"
+            "   AND status_changed_at < now() - make_interval(mins => %s)",
+            (STUCK_CHECKING_MINUTES,),
+        ).fetchone()[0]
     return {
         "audit": {
             "total": total,
             "last_event_id": last_id,
-            "chain_broken_at": chain_broken_at,
+            **check,
             "unsealed": unsealed,
             "oldest_unsealed_at": to_json(oldest_unsealed),
             "seal_overdue": seal_overdue,
@@ -415,5 +444,7 @@ def vault_health():
             "purge_waiting": purge_waiting,
             "purge_overdue": purge_overdue,
             "purge_overdue_minutes": PURGE_OVERDUE_MINUTES,
+            "stuck_checking": stuck_checking,
+            "stuck_checking_minutes": STUCK_CHECKING_MINUTES,
         },
     }

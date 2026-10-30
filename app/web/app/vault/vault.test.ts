@@ -34,7 +34,7 @@ describe("labels shown to youth", () => {
     expect(size(1.5 * 1024 * 1024)).toBe("1.5 MB");
   });
   it("has a word for every status a youth can see", () => {
-    for (const status of ["uploading", "scanning", "ready", "rejected"]) expect(STATUS[status]).toBeTruthy();
+    for (const status of ["uploading", "scanning", "ready", "rejected", "expired"]) expect(STATUS[status]).toBeTruthy();
   });
   it("explains each refusal the download can return", () => {
     for (const code of ["403", "409", "410"]) expect(DOWNLOAD_ERRORS[code]).toBeTruthy();

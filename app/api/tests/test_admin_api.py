@@ -191,6 +191,6 @@ def test_vault_health_counts_new_audit_rows_as_waiting_for_the_seal(client):
 
 def test_vault_health_shows_totals_only(client):
     docs = client.get(HEALTH, headers=ADMIN).json()["documents"]
-    assert list(docs["by_status"]) == ["uploading", "scanning", "ready", "rejected", "deleted"]
+    assert list(docs["by_status"]) == ["uploading", "scanning", "ready", "rejected", "deleted", "expired"]
     assert all(isinstance(n, int) for n in docs["by_status"].values())
     assert docs["purge_overdue"] <= docs["purge_waiting"]

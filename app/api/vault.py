@@ -183,7 +183,7 @@ def refusal(conn, request: Request, youth: Youth, req: UploadRequest) -> HTTPExc
 
     conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"vault-upload:{youth.pseudonym_id}",))
     used, recent = conn.execute(
-        "SELECT coalesce(sum(size_bytes) FILTER (WHERE status NOT IN ('rejected', 'deleted')), 0),"
+        "SELECT coalesce(sum(size_bytes) FILTER (WHERE status NOT IN ('rejected', 'deleted', 'expired')), 0),"
         "       count(*) FILTER (WHERE created_at > now() - interval '1 hour')"
         "  FROM vault.document WHERE owner_pseudonym_id = %s",
         (youth.pseudonym_id,),

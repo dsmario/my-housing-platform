@@ -14,7 +14,8 @@ same shape.
                           to the dead-letter queue.
 
 Every PURGE_EVERY_SECONDS it also purges deleted documents: every S3 version of
-the file is removed for good (§10). Once a day it seals the audit log (§7).
+the file is removed for good (§10), and uploads that never finished are expired.
+Once a day it seals the audit log (§7).
 
 Settings: VAULT_SCAN_QUEUE_URL, VAULT_QUARANTINE_BUCKET, VAULT_BUCKET, VAULT_AUDIT_BUCKET, and
 locally VAULT_S3_ENDPOINT and VAULT_SQS_ENDPOINT. Run: python vault_worker.py
@@ -188,6 +189,38 @@ def purge_deleted(s3, conn: psycopg.Connection) -> list[str]:
     return purged
 
 
+# Unfinished uploads -----------------------------------------------------------------
+#
+# An upload whose file never reached quarantine (the youth closed the app, the
+# connection dropped) would show as "checking" for ever and count against the
+# youth's storage limit. The upload link lasts minutes, so after an hour no file
+# can still come. If a file is there, it's left alone: its scan may be on the way.
+
+EXPIRE_UPLOADS_AFTER = timedelta(hours=1)
+
+
+def expire_unfinished_uploads(s3, conn: psycopg.Connection) -> list[str]:
+    rows = conn.execute(
+        "SELECT id, quarantine_object_key FROM vault.document"
+        " WHERE status IN ('uploading', 'scanning') AND status_changed_at < now() - %s"
+        " ORDER BY status_changed_at LIMIT 50",
+        (EXPIRE_UPLOADS_AFTER,),
+    ).fetchall()
+    expired = []
+    for doc, key in rows:
+        if key and s3.list_object_versions(Bucket=os.environ["VAULT_QUARANTINE_BUCKET"], Prefix=key).get("Versions"):
+            continue
+        updated = conn.execute(
+            "UPDATE vault.document SET status = 'expired', status_changed_at = now()"
+            " WHERE id = %s AND status IN ('uploading', 'scanning')",
+            (doc,),
+        ).rowcount
+        conn.commit()
+        if updated:
+            expired.append(str(doc))
+    return expired
+
+
 # Checks for the alarms (§11) ---------------------------------------------------------
 #
 # Log lines starting VAULT_ are counted by CloudWatch alarms (terraform/app/alarms.tf):
@@ -200,6 +233,14 @@ AUDIT_CHECK_EVERY_SECONDS = 3600
 def check_audit_chain(conn: psycopg.Connection) -> int | None:
     """The id of the first audit row whose hash doesn't match, or None if the chain is intact."""
     broken = conn.execute("SELECT vault.verify_audit_chain()").fetchone()[0]
+    # Kept for the admin Vault health page; the caller commits.
+    conn.execute(
+        "INSERT INTO vault.audit_chain_check (checked_at, last_event_id, chain_broken_at)"
+        " SELECT now(), max(id), %s FROM vault.audit_event"
+        " ON CONFLICT (id) DO UPDATE SET checked_at = EXCLUDED.checked_at,"
+        "   last_event_id = EXCLUDED.last_event_id, chain_broken_at = EXCLUDED.chain_broken_at",
+        (broken,),
+    )
     if broken is None:
         log.info("VAULT_AUDIT_CHAIN_OK")
     else:
@@ -309,6 +350,12 @@ def run() -> None:
                         log.info("purged %s", doc)
             except Exception:  # noqa: BLE001 - tried again at the next sweep
                 log.exception("VAULT_PURGE_FAILED")
+            try:
+                with connect() as conn:
+                    for doc in expire_unfinished_uploads(s3, conn):
+                        log.info("upload never finished, expired %s", doc)
+            except Exception:  # noqa: BLE001 - tried again at the next sweep
+                log.exception("expiring unfinished uploads failed")
             log.info("VAULT_WORKER_HEARTBEAT")
         if time.monotonic() - last_audit_check >= AUDIT_CHECK_EVERY_SECONDS:
             last_audit_check = time.monotonic()

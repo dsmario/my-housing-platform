@@ -20,6 +20,7 @@ export const STATUS: Record<string, string> = {
   scanning: "Checking…",
   ready: "Saved",
   rejected: "Not accepted",
+  expired: "Didn't finish. Delete it and try again.",
 };
 
 // Shown after a download fails, by the status the API returned.

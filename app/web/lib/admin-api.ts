@@ -32,6 +32,7 @@ export type RowsResponse = {
   rows: Row[];
   total: number;
   chain_broken_at?: number | null;
+  chain_checked_at?: string | null;
 };
 
 export type RowResponse = {
@@ -96,7 +97,11 @@ export type VaultHealth = {
   audit: {
     total: number;
     last_event_id: number | null;
+    chain_checked_at: string | null;
+    chain_checked_through: number | null;
     chain_broken_at: number | null;
+    chain_check_overdue: boolean;
+    chain_check_overdue_hours: number;
     unsealed: number;
     oldest_unsealed_at: string | null;
     seal_overdue: boolean;
@@ -104,9 +109,11 @@ export type VaultHealth = {
     last_seal: { sealed_at: string; first_event_id: number; last_event_id: number; object_key: string } | null;
   };
   documents: {
-    by_status: Record<"uploading" | "scanning" | "ready" | "rejected" | "deleted", number>;
+    by_status: Record<"uploading" | "scanning" | "ready" | "rejected" | "deleted" | "expired", number>;
     purge_waiting: number;
     purge_overdue: number;
     purge_overdue_minutes: number;
+    stuck_checking: number;
+    stuck_checking_minutes: number;
   };
 };

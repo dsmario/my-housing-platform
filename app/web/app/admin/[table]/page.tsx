@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { adminPage, type RowsResponse } from "../../../lib/admin-api";
 import { Cell, text } from "../cell";
+import { utc } from "../format";
 import { ModeBadge } from "../mode-badge";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +43,12 @@ export default async function TablePage({ params, searchParams }: Props) {
           <p>
             <b>{data.total}</b> audit records.
           </p>
-          {data.chain_broken_at == null ? (
-            <p className="notice">Integrity check passed. No record has been changed or removed.</p>
+          {!data.chain_checked_at ? (
+            <p className="muted">Not checked yet. The vault worker checks every hour.</p>
+          ) : data.chain_broken_at == null ? (
+            <p className="notice">
+              Integrity check passed ({utc(data.chain_checked_at)}). No record has been changed or removed.
+            </p>
           ) : (
             <p className="error">
               Integrity check failed at record {data.chain_broken_at}. A record may have been changed or

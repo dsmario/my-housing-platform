@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { adminPage, type VaultHealth } from "../../../lib/admin-api";
+import { count, utc } from "../format";
 
 export const dynamic = "force-dynamic";
 
@@ -12,21 +13,17 @@ const STATUS_LABELS: Record<keyof VaultHealth["documents"]["by_status"], string>
   scanning: "Being checked for viruses",
   rejected: "Rejected (wrong file type, too big, or unsafe)",
   deleted: "Deleted by the youth",
+  expired: "Upload didn't finish (expired)",
 };
-
-// "2026-10-30 02:00 UTC": the same on every screen, and matches the AWS alarms.
-function utc(iso: string): string {
-  return `${iso.slice(0, 16).replace("T", " ")} UTC`;
-}
-
-// "1 record", "5 records".
-function count(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
 
 export default async function VaultHealthPage() {
   const { audit, documents } = await adminPage<VaultHealth>("/vault-health");
-  const allGood = audit.chain_broken_at == null && !audit.seal_overdue && documents.purge_overdue === 0;
+  const allGood =
+    audit.chain_broken_at == null &&
+    !audit.chain_check_overdue &&
+    !audit.seal_overdue &&
+    documents.purge_overdue === 0 &&
+    documents.stuck_checking === 0;
 
   return (
     <>
@@ -42,7 +39,14 @@ export default async function VaultHealthPage() {
         <b>{count(audit.total, "audit record", "audit records")}</b>.{" "}
         <Link href="/admin/vault.audit_event">Details</Link>
       </p>
-      {audit.chain_broken_at == null ? (
+      {audit.chain_checked_at && <p>Last full check: {utc(audit.chain_checked_at)}.</p>}
+      {audit.chain_check_overdue && (
+        <p className="error">
+          The worker hasn&apos;t checked the audit log for over {audit.chain_check_overdue_hours} hours. Check
+          the vault worker.
+        </p>
+      )}
+      {!audit.chain_checked_at ? null : audit.chain_broken_at == null ? (
         <p className="notice">Integrity check passed. No record has been changed or removed.</p>
       ) : (
         <p className="error">
@@ -89,6 +93,13 @@ export default async function VaultHealthPage() {
           </tbody>
         </table>
       </div>
+      {documents.stuck_checking > 0 && (
+        <p className="error">
+          {count(documents.stuck_checking, "document has", "documents have")} been &ldquo;checking&rdquo; for over{" "}
+          {documents.stuck_checking_minutes} minutes. The file arrived but no virus scan result came. Check the
+          scan queue and the vault worker.
+        </p>
+      )}
       {documents.purge_waiting > 0 && (
         <p>
           <b>{count(documents.purge_waiting, "deleted file is", "deleted files are")}</b> waiting to be wiped
